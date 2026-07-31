@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
-import { Menu, X, Sun, Moon, Globe, ShoppingBag, BookOpen, Image as ImageIcon, Phone, Send, ShoppingCart, User as UserIcon, Clock, Shield, ChevronDown, Sparkles, Heart } from 'lucide-react';
+import { Menu, X, Sun, Moon, Globe, ShoppingBag, BookOpen, Image as ImageIcon, Phone, Send, ShoppingCart, User as UserIcon, Clock, Shield, ChevronDown, Sparkles, Heart, HardDrive } from 'lucide-react';
 import { AppContext } from '../App';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -9,7 +9,8 @@ export default function Navbar() {
   const { 
     lang, setLang, t, theme, toggleTheme, galleryData, setOrderModalOpen,
     cart, user, orders, isAdminLoggedIn, wishlist, setIsWishlistOpen,
-    setIsCartOpen, setIsAuthModalOpen, setIsOrderHistoryOpen, setIsOwnerPortalOpen
+    setIsCartOpen, setIsAuthModalOpen, setIsOrderHistoryOpen, setIsOwnerPortalOpen,
+    setIsWorkspaceOpen
   } = useContext(AppContext);
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -171,16 +172,16 @@ export default function Navbar() {
                 return (
                   <button
                     onClick={isAdmin ? () => setIsOwnerPortalOpen(true) : undefined}
-                    title="Owner Admin Portal (Musu)"
-                    className={`p-1.5 rounded-full transition-all border flex items-center justify-center gap-1.5 ${
+                    title={isAdmin ? "Owner Admin Portal" : undefined}
+                    className={`p-1 rounded-full transition-all border flex items-center justify-center shrink-0 ${
                       isAdmin 
                         ? 'bg-amber-500 text-slate-900 border-amber-300 shadow-md cursor-pointer hover:scale-105 active:scale-95' 
-                        : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-600 border-slate-200 dark:border-slate-700 cursor-default opacity-50'
+                        : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 cursor-default opacity-80 pointer-events-none'
                     }`}
                   >
                     <img 
                       src="https://i.ibb.co/wrc3VVRg/PROFILE.jpg" 
-                      alt="Musu Bakery Owner" 
+                      alt="" 
                       className="w-6 h-6 rounded-full object-cover border border-amber-300 shadow-sm shrink-0" 
                       referrerPolicy="no-referrer"
                     />
@@ -222,6 +223,25 @@ export default function Navbar() {
                       </span>
                       <WeatherWidget />
                     </div>
+
+                    <div className="h-px bg-slate-100 dark:bg-slate-800" />
+
+                    {/* Google Workspace Hub Trigger */}
+                    <button
+                      onClick={() => {
+                        setIsWorkspaceOpen(true);
+                        setMoreDropdownOpen(false);
+                      }}
+                      className="w-full flex items-center justify-between p-3 rounded-xl bg-gradient-to-r from-emerald-500/10 to-teal-500/10 hover:from-emerald-500/20 hover:to-teal-500/20 text-emerald-700 dark:text-emerald-300 font-bold text-xs border border-emerald-500/30 transition-all group"
+                    >
+                      <div className="flex items-center gap-2">
+                        <HardDrive size={16} className="text-emerald-500 group-hover:scale-110 transition-transform" />
+                        <span>{lang === 'en' ? 'Google Drive & Sheets' : 'গুগল ড্রাইভ ও শিট'}</span>
+                      </div>
+                      <span className="text-[9px] bg-emerald-500 text-white font-extrabold px-1.5 py-0.5 rounded-full">
+                        HUB
+                      </span>
+                    </button>
 
                     <div className="h-px bg-slate-100 dark:bg-slate-800" />
 
@@ -402,6 +422,14 @@ export default function Navbar() {
                       {t.nav.langToggle}
                     </button>
                   </div>
+
+                  <button
+                    onClick={() => { setIsWorkspaceOpen(true); setMobileMenuOpen(false); }}
+                    className="w-full flex items-center justify-center gap-2 p-3 rounded-xl bg-emerald-600 text-white font-bold text-xs shadow-md mt-2"
+                  >
+                    <HardDrive size={16} />
+                    <span>{lang === 'en' ? 'Google Drive & Sheets' : 'গুগল ড্রাইভ ও শিট'}</span>
+                  </button>
                 </div>
 
                 <button

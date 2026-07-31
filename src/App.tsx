@@ -27,10 +27,14 @@ import OwnerPortalModal from './components/OwnerPortalModal';
 import QuickAddToCartModal from './components/QuickAddToCartModal';
 import WishlistModal from './components/WishlistModal';
 import PromoBanner from './components/PromoBanner';
-import CelebrationsModal, { CelebrationEvent } from './components/CelebrationsModal';
+import CelebrationsModal, { CelebrationEvent, getStoredCelebrations } from './components/CelebrationsModal';
 import CelebrationsBanner from './components/CelebrationsBanner';
 import ProBakingTips from './components/ProBakingTips';
 import CakeBuilder from './components/CakeBuilder';
+import WorkspaceModal from './components/WorkspaceModal';
+import { getAccessToken } from './lib/workspaceAuth';
+import { listCalendarEvents } from './utils/calendarService';
+import { playSound } from './lib/sounds';
 
 const getInitialFallbackGalleryData = (): GalleryData => {
   return FULL_GALLERY_BACKUP as unknown as GalleryData;
@@ -226,6 +230,8 @@ interface AppContextType {
   isWishlisted: (productNameEn: string) => boolean;
   isWishlistOpen: boolean;
   setIsWishlistOpen: (open: boolean) => void;
+  isWorkspaceOpen: boolean;
+  setIsWorkspaceOpen: (open: boolean) => void;
 }
 
 export const AppContext = createContext<AppContextType>({} as AppContextType);
@@ -457,6 +463,7 @@ export default function App() {
   const [isOrderHistoryOpen, setIsOrderHistoryOpen] = useState(false);
   const [isOwnerPortalOpen, setIsOwnerPortalOpen] = useState(false);
   const [isWishlistOpen, setIsWishlistOpen] = useState(false);
+  const [isWorkspaceOpen, setIsWorkspaceOpen] = useState(false);
   const [isCelebrationsModalOpen, setIsCelebrationsModalOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isStoryInView, setIsStoryInView] = useState(false);
@@ -519,6 +526,70 @@ export default function App() {
       localStorage.setItem('bnf_orders', JSON.stringify(orders));
     } catch (e) {}
   }, [orders]);
+
+  // Recurring 24-hour system check for upcoming celebrations & Google Calendar events
+  useEffect(() => {
+    const checkUpcoming24hEvents = async () => {
+      try {
+        const list = getStoredCelebrations();
+        const now = new Date();
+        const year = now.getFullYear();
+
+        // 1. Check local celebrations feed
+        for (const item of list) {
+          const eDate = new Date(item.date);
+          const target = new Date(year, eDate.getMonth(), eDate.getDate());
+          if (target.getTime() < now.getTime() - 24 * 60 * 60 * 1000) {
+            target.setFullYear(year + 1);
+          }
+
+          const diffMs = target.getTime() - now.getTime();
+          const diffHours = diffMs / (1000 * 60 * 60);
+
+          if (diffHours >= -2 && diffHours <= 24) {
+            const notifKey = `notified_24h_${item.id}_${target.toDateString()}`;
+            if (!sessionStorage.getItem(notifKey)) {
+              sessionStorage.setItem(notifKey, 'true');
+              playSound('ding');
+              setToast({
+                message: `🎉 UPCOMING CELEBRATION ALERT! ${item.personName}'s ${item.type.toUpperCase()} is in less than 24 hours! Order cake now! 🎂`,
+                visible: true
+              });
+            }
+          }
+        }
+
+        // 2. Check Google Calendar API if logged in
+        const token = getAccessToken();
+        if (token) {
+          const calEvents = await listCalendarEvents(token, 10).catch(() => []);
+          for (const calEv of calEvents) {
+            if (calEv.start?.dateTime || calEv.start?.date) {
+              const evDate = new Date(calEv.start.dateTime || calEv.start.date);
+              const diffHours = (evDate.getTime() - now.getTime()) / (1000 * 60 * 60);
+              if (diffHours >= -2 && diffHours <= 24) {
+                const notifKey = `notified_gcal_24h_${calEv.id}`;
+                if (!sessionStorage.getItem(notifKey)) {
+                  sessionStorage.setItem(notifKey, 'true');
+                  playSound('ding');
+                  setToast({
+                    message: `🗓️ GOOGLE CALENDAR ALERT: "${calEv.summary || 'Upcoming Event'}" is in less than 24 hours! 🎂`,
+                    visible: true
+                  });
+                }
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('24h system check notice:', err);
+      }
+    };
+
+    checkUpcoming24hEvents();
+    const interval = setInterval(checkUpcoming24hEvents, 20000);
+    return () => clearInterval(interval);
+  }, []);
 
   const addToCart = useCallback((item: Omit<CartItem, 'id'>) => {
     if (!user || !user.isLoggedIn) {
@@ -1064,7 +1135,8 @@ export default function App() {
       isAdminLoggedIn, setIsAdminLoggedIn,
       setIsCartOpen, setIsAuthModalOpen, setIsOrderHistoryOpen, setIsOwnerPortalOpen,
       openQuickAddToCart,
-      wishlist, toggleWishlist, isWishlisted, isWishlistOpen, setIsWishlistOpen
+      wishlist, toggleWishlist, isWishlisted, isWishlistOpen, setIsWishlistOpen,
+      isWorkspaceOpen, setIsWorkspaceOpen
     }}>
       <Background />
       <div className={cn(
@@ -1144,6 +1216,11 @@ export default function App() {
           onUpdateStatus={updateOrderStatus}
           onUpdateOrder={updateOrder}
           lang={lang}
+        />
+
+        <WorkspaceModal
+          isOpen={isWorkspaceOpen}
+          onClose={() => setIsWorkspaceOpen(false)}
         />
 
         <QuickAddToCartModal
@@ -1258,13 +1335,20 @@ export default function App() {
 
           {/* Owner Admin Portal Shortcut */}
           {(() => {
-            const isAdmin = user?.isLoggedIn && (user?.phone?.includes('8584017701') || user?.phone?.includes('9875563329'));
+            const cleanPhone = (user?.phone || '').replace(/\D/g, '');
+            const isAdmin = user?.isLoggedIn && (cleanPhone.endsWith('8584017701') || cleanPhone.endsWith('9875563329'));
             return (
               <button
                 onClick={isAdmin ? () => setIsOwnerPortalOpen(true) : undefined}
-                className={"p-3 sm:p-3.5 rounded-full shadow-md transition-all border " + (isAdmin ? "bg-amber-50 hover:bg-amber-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-500/30 cursor-pointer" : "bg-slate-50 dark:bg-slate-800 text-slate-300 dark:text-slate-600 border-slate-200 dark:border-slate-700 cursor-default opacity-50")}
+                title={isAdmin ? "Owner Admin Portal" : undefined}
+                className={"p-2 sm:p-2.5 rounded-full shadow-md transition-all border flex items-center justify-center " + (isAdmin ? "bg-amber-50 hover:bg-amber-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-500/30 cursor-pointer" : "bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 cursor-default opacity-80 pointer-events-none")}
               >
-                <Shield size={20} />
+                <img 
+                  src="https://i.ibb.co/wrc3VVRg/PROFILE.jpg" 
+                  alt="" 
+                  className="w-5 h-5 rounded-full object-cover border border-amber-400 shadow-sm shrink-0" 
+                  referrerPolicy="no-referrer"
+                />
               </button>
             );
           })()}

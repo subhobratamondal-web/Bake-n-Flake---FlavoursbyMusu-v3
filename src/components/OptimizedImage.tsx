@@ -84,11 +84,12 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
   };
 
   const finalSrc = currentSrc || src || fallbackSrc;
+  const isGif = finalSrc.toLowerCase().includes('gif') || finalSrc.toLowerCase().includes('ezgif') || finalSrc.toLowerCase().includes('giphy');
 
   return (
     <div ref={containerRef} className={cn("relative overflow-hidden w-full h-full", containerClassName)}>
       {/* Skeleton overlay while loading */}
-      {!isLoaded && (
+      {!isLoaded && !isGif && (
         <div 
           className={cn(
             "absolute inset-0 z-10 animate-pulse bg-gradient-to-r from-slate-200 via-pink-100/50 to-slate-200 dark:from-slate-800 dark:via-pink-900/20 dark:to-slate-800",
@@ -101,14 +102,14 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
         <img
           src={finalSrc}
           alt={alt}
-          loading="lazy"
+          loading={isGif ? "eager" : "lazy"}
           decoding="async"
           onLoad={() => setIsLoaded(true)}
           onError={handleError}
           referrerPolicy="no-referrer"
           className={cn(
             "transition-opacity duration-300",
-            isLoaded ? "opacity-100" : "opacity-0",
+            isLoaded || isGif ? "opacity-100" : "opacity-0",
             className
           )}
           style={style}

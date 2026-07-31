@@ -4,6 +4,8 @@ import { X, Shield, Search, CheckCircle2, MessageSquare, Phone, MapPin, External
 import { Order, OrderStatus, CartItem } from '../types';
 import { generateWhatsAppStatusUpdateLink, TARGET_GOOGLE_SHEET_ID } from '../utils/googleSheetsSync';
 import { AppContext } from '../App';
+import { sendStatusUpdateEmail } from '../utils/gmailService';
+import { getAccessToken } from '../lib/workspaceAuth';
 
 interface OwnerPortalModalProps {
   isOpen: boolean;
@@ -25,7 +27,7 @@ export default function OwnerPortalModal({
   onUpdateOrder,
   lang
 }: OwnerPortalModalProps) {
-  const { isAdminLoggedIn, setIsAdminLoggedIn, user } = useContext(AppContext);
+  const { isAdminLoggedIn, setIsAdminLoggedIn, user, setIsWorkspaceOpen } = useContext(AppContext);
   const cleanPhone = (user?.phone || '').replace(/\D/g, '');
   const isAuthorizedAdmin = user?.isLoggedIn && (cleanPhone.endsWith('8584017701') || cleanPhone.endsWith('9875563329'));
   const [userIdInput, setUserIdInput] = useState('');
@@ -81,11 +83,27 @@ export default function OwnerPortalModal({
     setEditingOrderId(null);
   };
 
-  const handleStatusChange = (order: Order, newStatus: OrderStatus) => {
+  const [emailNotice, setEmailNotice] = useState<string>('');
+
+  const handleStatusChange = async (order: Order, newStatus: OrderStatus) => {
     if (editingOrderId === order.id) {
       handleSaveEdit(order, newStatus);
     } else {
       onUpdateStatus(order.id, newStatus);
+    }
+
+    // Attempt automated email notification via Gmail API if email exists
+    if (order.customerEmail && order.customerEmail.includes('@')) {
+      const token = getAccessToken();
+      if (token) {
+        try {
+          await sendStatusUpdateEmail(token, order, newStatus);
+          setEmailNotice(lang === 'en' ? `Status updated & confirmation email sent to ${order.customerEmail}` : `অর্ডার স্ট্যাটাস আপডেট ও ${order.customerEmail}-এ ইমেইল পাঠানো হয়েছে!`);
+          setTimeout(() => setEmailNotice(''), 4000);
+        } catch (err) {
+          console.warn('Gmail API send note:', err);
+        }
+      }
     }
   };
 
@@ -300,6 +318,14 @@ function handleRequest(e) {
                 </div>
 
                 <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setIsWorkspaceOpen(true)}
+                    className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-md transition-all"
+                  >
+                    <FileSpreadsheet size={14} />
+                    {lang === 'en' ? 'Workspace Hub (Drive & Sheets)' : 'গুগল ড্রাইভ ও শিট হাব'}
+                  </button>
+
                   <a
                     href={`https://docs.google.com/spreadsheets/d/${TARGET_GOOGLE_SHEET_ID}/edit`}
                     target="_blank"
@@ -307,7 +333,7 @@ function handleRequest(e) {
                     className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all"
                   >
                     <ExternalLink size={14} />
-                    {lang === 'en' ? 'Open Google Sheet' : 'গুগল শিট খুলুন'}
+                    {lang === 'en' ? 'Open Sheet' : 'গুগল শিট'}
                   </a>
 
                   <button
@@ -318,6 +344,14 @@ function handleRequest(e) {
                   </button>
                 </div>
               </div>
+
+              {/* Email Notification Notice */}
+              {emailNotice && (
+                <div className="mx-6 mt-4 p-3 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs font-bold rounded-2xl text-center shadow-sm flex items-center justify-center gap-2 animate-fade-in">
+                  <CheckCircle2 size={16} className="text-emerald-600 dark:text-emerald-400" />
+                  <span>{emailNotice}</span>
+                </div>
+              )}
 
               {/* Controls Bar */}
               <div className="p-4 bg-slate-50 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 flex flex-wrap gap-3 items-center justify-between shrink-0">

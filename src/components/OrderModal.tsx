@@ -8,6 +8,8 @@ import { AppContext } from '../App';
 import { playSound } from '../lib/sounds';
 
 import { sendOrderToGoogleSheet } from '../utils/googleSheetsSync';
+import { sendOrderConfirmationEmail } from '../utils/gmailService';
+import { getAccessToken } from '../lib/workspaceAuth';
 
 const triggerCelebratoryConfetti = () => {
   const count = 180;
@@ -132,6 +134,15 @@ export default function OrderModal({ isOpen, onClose, lang }: OrderModalProps) {
       });
 
       await sendOrderToGoogleSheet(createdOrder);
+
+      // Attempt to send order confirmation email via Gmail API if OAuth token is available
+      const token = getAccessToken();
+      if (token && createdOrder.customerEmail) {
+        sendOrderConfirmationEmail(token, createdOrder).catch(err => {
+          console.warn('Gmail API confirmation email note:', err);
+        });
+      }
+
       triggerCelebratoryConfetti();
     } catch (err) {
       console.error('Order Sync Error:', err);

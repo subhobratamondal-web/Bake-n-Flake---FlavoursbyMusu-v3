@@ -32,15 +32,17 @@ export function convertImageUrl(url: string): string {
 export function getOptimizedImageUrl(url: string, width = 500, quality = 75): string {
   if (!url) return 'https://i.ibb.co/Xx2kxrrg/LOGO-1.png';
   let cleaned = convertImageUrl(url.trim());
+  const lower = cleaned.toLowerCase();
 
-  // Preserve GIFs, SVGs, Data URIs, and animated media so they never get broken or frozen
+  // Preserve GIFs, SVGs, Data URIs, and animated media so they never get broken, frozen, or converted to webp
   if (
     cleaned.startsWith('data:') ||
-    cleaned.match(/\.(gif|GIF|svg|SVG)($|\?)/i) ||
-    cleaned.includes('ezgif') ||
-    cleaned.includes('giphy.com') ||
-    cleaned.includes('tenor.com') ||
-    cleaned.includes('format=gif')
+    lower.includes('.gif') ||
+    lower.includes('ezgif') ||
+    lower.includes('giphy') ||
+    lower.includes('tenor') ||
+    lower.includes('format=gif') ||
+    lower.includes('.svg')
   ) {
     return cleaned;
   }
@@ -417,3 +419,68 @@ export function generateWhatsAppCustomerThanksLink(order: any): string {
   const text = `Hi Musu! 👋 Thank you so much! I received my order *${order.id}* from *Bake n' Flake*! 🎂✨\n\nIt was super fresh and delicious! ❤️🍰`;
   return `https://wa.me/${BAKERY_WHATSAPP_NUMBER}?text=${encodeURIComponent(text)}`;
 }
+
+export async function sendCustomerLoginToGoogleSheet(profile: {
+  name: string;
+  phone: string;
+  email: string;
+  address?: string;
+  loginMethod?: string;
+}) {
+  try {
+    let clientIp = 'Pending IP';
+    let locationDetails = 'Kolkata, WB, India';
+
+    // Fetch public IP and Geo details
+    try {
+      const geoRes = await fetch('https://ipapi.co/json/').then(res => res.json()).catch(() => null);
+      if (geoRes && geoRes.ip) {
+        clientIp = geoRes.ip;
+        locationDetails = `${geoRes.city || ''}, ${geoRes.region || ''}, ${geoRes.country_name || ''} (Lat: ${geoRes.latitude || ''}, Lon: ${geoRes.longitude || ''})`;
+      }
+    } catch (e) {
+      console.warn('IP Geo fetch note:', e);
+    }
+
+    const deviceAgent = typeof navigator !== 'undefined' ? navigator.userAgent : 'Browser User';
+    const timestampStr = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+
+    const payload = {
+      orderId: 'USR-' + Math.floor(100000 + Math.random() * 900000),
+      timestamp: timestampStr,
+      customerName: profile.name,
+      customerPhone: profile.phone,
+      customerEmail: profile.email,
+      deliveryAddress: profile.address || 'Kolkata',
+      notes: `Method: ${profile.loginMethod || 'App Login'} | IP: ${clientIp} | Location: ${locationDetails} | Device: ${deviceAgent}`,
+      items: `CUSTOMER LOGIN LOG [${profile.loginMethod || 'App Login'}]`,
+      subtotal: 0,
+      total: 0,
+      status: 'User Registered',
+      paymentMethod: 'N/A',
+      sheetName: 'Customer Log',
+      sheetGid: '0'
+    };
+
+    // 1. Send via Backend Server API Proxy
+    fetch('/api/sync-sheet', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }).catch(err => console.warn('Customer login server sync notice:', err));
+
+    // 2. Direct Google Apps Script Webhook
+    fetch(DEFAULT_GOOGLE_APPS_SCRIPT_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }).catch(err => console.warn('Customer login webhook notice:', err));
+
+    return true;
+  } catch (err) {
+    console.error('Customer login sheet recording error:', err);
+    return false;
+  }
+}
+
