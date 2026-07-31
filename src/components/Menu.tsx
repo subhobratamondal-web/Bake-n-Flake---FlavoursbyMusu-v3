@@ -565,7 +565,7 @@ export default function Menu() {
         </div>
 
         {/* Sticky Search & Tabs Bar - Always visible now - FULL WIDTH WITH GAP */}
-        <div className="sticky top-[86px] z-[90] left-0 right-0 w-full py-2 bg-slate-50/90 dark:bg-[#080808]/90 backdrop-blur-xl border-y border-slate-200 dark:border-white/10 mb-8 shadow-xl transition-all duration-300">
+        <div className="sticky top-[68px] z-[90] left-0 right-0 w-full py-1.5 bg-slate-50/90 dark:bg-[#080808]/90 backdrop-blur-xl border-y border-slate-200 dark:border-white/10 mb-6 shadow-xl transition-all duration-300">
           <div className="w-full max-w-7xl mx-auto px-4 md:px-8">
             {/* Search Bar */}
             <div className="relative group mb-4 md:mb-8 max-w-4xl mx-auto">
@@ -831,6 +831,25 @@ export default function Menu() {
                 <div className="absolute top-4 left-4 md:top-8 md:left-8 w-12 h-12 md:w-20 md:h-20 bg-white/90 dark:bg-black/60 backdrop-blur-md rounded-full flex items-center justify-center border border-white/40 shadow-xl pointer-events-none z-20 overflow-hidden">
                   <img src="https://i.ibb.co/Xx2kxrrg/LOGO-1.png" alt="Logo" className="w-full h-full object-cover" />
                 </div>
+
+                {/* Wishlist Button on Top Right of Image */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    playSound('pop');
+                    if (selectedProduct) toggleWishlist(selectedProduct);
+                  }}
+                  title={isWishlisted(selectedProduct.nameEn) ? "Remove from Wishlist" : "Add to Wishlist"}
+                  className={cn(
+                    "absolute top-4 right-14 md:top-8 md:right-20 z-30 w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center transition-all border shadow-lg backdrop-blur-md cursor-pointer",
+                    isWishlisted(selectedProduct.nameEn)
+                      ? "bg-pink-500 text-white border-pink-400 scale-110 shadow-pink-500/50"
+                      : "bg-white/80 dark:bg-black/60 text-pink-500 border-white/40 hover:bg-pink-500 hover:text-white"
+                  )}
+                >
+                  <Heart size={20} className={isWishlisted(selectedProduct.nameEn) ? "fill-white" : ""} />
+                </button>
                   
                 {/* Controls */}
                 {getProductImages(selectedProduct.nameEn).length > 1 && (
@@ -871,78 +890,79 @@ export default function Menu() {
               </div>
 
               {/* Info Side */}
-              <div className="w-full md:w-2/5 p-6 md:p-12 shrink flex flex-col justify-between bg-white/70 dark:bg-slate-900/60 md:bg-transparent dark:md:bg-transparent overflow-y-auto max-h-[50vh] md:max-h-none hide-scrollbar">
+              <div className="w-full md:w-2/5 p-5 md:p-8 shrink flex flex-col justify-between bg-white/70 dark:bg-slate-900/60 md:bg-transparent dark:md:bg-transparent overflow-y-auto max-h-[50vh] md:max-h-none hide-scrollbar">
                  <div>
                    <motion.div
                      initial={{ opacity: 0, x: 20 }}
                      animate={{ opacity: 1, x: 0 }}
                      transition={{ delay: 0.2 }}
                    >
-                     <p className="text-pink-500 font-bold tracking-[0.3em] uppercase text-[9px] md:text-[10px] mb-2 md:mb-3">
+                     <p className="text-pink-500 font-bold tracking-[0.3em] uppercase text-[9px] md:text-[10px] mb-1.5 md:mb-2">
                         {t.lang === 'en' ? 'MENU ITEM' : 'মেনু আইটেম'}
                      </p>
                      
-                     <h2 className="text-2xl md:text-5xl font-black text-slate-900 dark:text-white leading-[1.1] mb-4 md:mb-6 tracking-tighter uppercase italic">
+                     <h2 className="text-xl md:text-3xl font-black text-slate-900 dark:text-white leading-tight mb-4 tracking-tighter uppercase italic">
                         {t.lang === 'en' ? selectedProduct.nameEn : selectedProduct.nameBn}
                      </h2>
-
-                     <div className="space-y-3 md:space-y-4 mb-6 md:mb-8">
-                        <div className="text-slate-600 dark:text-slate-300 text-[10px] md:text-sm leading-relaxed font-medium whitespace-pre-wrap max-h-[20vh] md:max-h-[30vh] overflow-y-auto pr-2 custom-scrollbar">
-                           {t.lang === 'en' 
-                            ? selectedProduct.descEn || `✨ The Magic of Classic ${selectedProduct.nameEn}! 🎂\nMake your special days even sweeter with Bake n' Flake's super soft, fluffy, and premium ${selectedProduct.nameEn}! 🤍`
-                            : selectedProduct.descBn || `✨ ক্লাসিক ${selectedProduct.nameBn || selectedProduct.nameEn} এর স্নিগ্ধ জাদুকরী স্বাদ! 🎂\nআপনার স্পেশাল দিনগুলোকে আরও মিষ্টি করে তুলতে Bake n' Flake নিয়ে এসেছে একদম নরম, তুলতুলে এবং প্রিমিয়াম ${selectedProduct.nameBn || selectedProduct.nameEn}! 🤍`}
-                        </div>
-
-                        <div className="w-10 md:w-12 h-1 md:h-1.5 bg-pink-500 rounded-full shadow-[0_0_15px_rgba(236,72,153,0.6)] mt-4" />
-                     </div>
                    </motion.div>
+
+                   {/* Action Buttons */}
+                   <div className="grid grid-cols-1 gap-2.5 mb-5">
+                      <button 
+                        onClick={() => {
+                          const itemToCart = selectedProduct;
+                          setSelectedProduct(null);
+                          if (openQuickAddToCart && itemToCart) {
+                            openQuickAddToCart(itemToCart);
+                          }
+                        }}
+                        className="w-full py-3.5 bg-gradient-to-r from-pink-500 via-rose-500 to-amber-500 text-white rounded-2xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-2 transition-all shadow-lg shadow-pink-500/20 group cursor-pointer"
+                      >
+                         <ShoppingCart size={18} className="group-hover:scale-110 transition-transform" /> 
+                         {t.lang === 'en' ? 'Add to Cart' : 'কার্টে যোগ করুন'}
+                      </button>
+
+                      <button 
+                        onClick={() => {
+                          setSelectedProduct(null);
+                          setOrderModalOpen(true);
+                        }}
+                        className="w-full py-3 bg-slate-900 dark:bg-slate-800 text-white rounded-2xl font-bold uppercase tracking-widest text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
+                      >
+                         <ShoppingBag size={16} /> Direct Custom Order
+                      </button>
+                      
+                      <button 
+                        onClick={() => setIsReviewsModalOpen(true)}
+                        className="w-full py-2.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all border border-amber-500/30 shadow-sm cursor-pointer"
+                      >
+                         <Star size={16} className="fill-amber-400 text-amber-400" />
+                         {t.lang === 'en' ? 'Product Reviews & Feedback (12)' : 'প্রোডাক্ট রিভিউ ও ফিডব্যাক (১২)'}
+                      </button>
+
+                      <a 
+                        href="https://www.facebook.com/flavoursbymusu/photos"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="w-full py-2.5 bg-white dark:bg-white/5 hover:bg-slate-50 dark:hover:bg-white/10 text-slate-800 dark:text-white rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all border border-slate-200 dark:border-white/10 shadow-sm"
+                      >
+                         <Globe size={16} className="text-pink-600" /> VIEW MORE IMAGE
+                      </a>
+                   </div>
+
+                   {/* Description text placed below buttons */}
+                   <div className="space-y-2 mb-4 bg-pink-50/50 dark:bg-white/5 p-3.5 rounded-2xl border border-pink-100 dark:border-white/10">
+                      <div className="text-slate-700 dark:text-slate-200 text-xs md:text-sm leading-relaxed font-semibold whitespace-pre-wrap max-h-[22vh] overflow-y-auto pr-1 custom-scrollbar">
+                         {t.lang === 'en' 
+                          ? selectedProduct.descEn || `✨ The Magic of Classic ${selectedProduct.nameEn}! 🎂\nMake your special days even sweeter with Bake n' Flake's super soft, fluffy, and premium ${selectedProduct.nameEn}! 🤍`
+                          : selectedProduct.descBn || `✨ ক্লাসিক ${selectedProduct.nameBn || selectedProduct.nameEn} এর স্নিগ্ধ জাদুকরী স্বাদ! 🎂\nআপনার স্পেশাল দিনগুলোকে আরও মিষ্টি করে তুলতে Bake n' Flake নিয়ে এসেছে একদম নরম, তুলতুলে এবং প্রিমিয়াম ${selectedProduct.nameBn || selectedProduct.nameEn}! 🤍`}
+                      </div>
+                      <div className="w-10 h-1 bg-pink-500 rounded-full shadow-[0_0_10px_rgba(236,72,153,0.6)] mt-2" />
+                   </div>
                  </div>
 
-                 <div className="grid grid-cols-1 gap-3">
-                    <button 
-                      onClick={() => {
-                        const itemToCart = selectedProduct;
-                        setSelectedProduct(null);
-                        if (openQuickAddToCart && itemToCart) {
-                          openQuickAddToCart(itemToCart);
-                        }
-                      }}
-                      className="w-full py-4 bg-gradient-to-r from-pink-500 via-rose-500 to-amber-500 text-white rounded-2xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-2 transition-all shadow-lg shadow-pink-500/20 group"
-                    >
-                       <ShoppingCart size={18} className="group-hover:scale-110 transition-transform" /> 
-                       {t.lang === 'en' ? 'Add to Cart' : 'কার্টে যোগ করুন'}
-                    </button>
-
-                    <button 
-                      onClick={() => {
-                        setSelectedProduct(null);
-                        setOrderModalOpen(true);
-                      }}
-                      className="w-full py-3.5 bg-slate-900 dark:bg-slate-800 text-white rounded-2xl font-bold uppercase tracking-widest text-xs flex items-center justify-center gap-2 transition-all"
-                    >
-                       <ShoppingBag size={16} /> Direct Custom Order
-                    </button>
-                    
-                    <button 
-                      onClick={() => setIsReviewsModalOpen(true)}
-                      className="w-full py-3 bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all border border-amber-500/30 shadow-sm cursor-pointer"
-                    >
-                       <Star size={16} className="fill-amber-400 text-amber-400" />
-                       {t.lang === 'en' ? 'Product Reviews & Feedback (12)' : 'প্রোডাক্ট রিভিউ ও ফিডব্যাক (১২)'}
-                    </button>
-
-                    <a 
-                      href="https://www.facebook.com/flavoursbymusu/photos"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="w-full py-3 bg-white dark:bg-white/5 hover:bg-slate-50 dark:hover:bg-white/10 text-slate-800 dark:text-white rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all border border-slate-200 dark:border-white/10 shadow-sm"
-                    >
-                       <Globe size={16} className="text-pink-600" /> VIEW MORE IMAGE
-                    </a>
-                 </div>
-
-                 <div className="mt-8 pt-6 border-t border-slate-100 dark:border-white/5 text-center md:text-left">
-                    <p className="text-[9px] text-slate-400 dark:text-slate-500 italic uppercase tracking-[0.2em] font-medium">
+                 <div className="pt-3 border-t border-slate-200 dark:border-white/10 text-center md:text-left">
+                    <p className="text-[9px] md:text-[10px] text-slate-500 dark:text-slate-400 font-bold italic uppercase tracking-[0.15em]">
                        * Pricing will be based on your customization choices
                     </p>
                  </div>

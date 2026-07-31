@@ -246,8 +246,18 @@ app.post(['/api/order', '/order'], async (req, res) => {
   }
 });
 
+app.get(['/api/gallery', '/gallery'], (req, res) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.json(cachedGallery || FALLBACK_DATA);
+});
+
 // Route matcher for /api/index when Vercel rewrites to /api/index
 app.all('/api/index', (req, res, next) => {
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
   const targetPath = (req.query.path as string) || (req.headers['x-invoke-path'] as string) || '';
   if (targetPath.includes('gallery') || req.url.includes('gallery')) {
     return res.json(cachedGallery || FALLBACK_DATA);
@@ -405,6 +415,9 @@ const syncQueue: string[] = [];
 // Define priority sheets that must be loaded first
 let priorityList = [
   'Menu Database', 
+  'Tub Cakes (Tranding🔥 )',
+  'Tub Cakes (Tranding🔥)',
+  'Tub Cakes',
   'Subsheet B2',
   'B2 IMAGE LINK',
   'Image URL',
@@ -415,6 +428,7 @@ let priorityList = [
   'Facebook Video', 
   'Footer', 
   'FAQ',
+  'Combos',
   // User's requested categories - Signature
   'Chocolate Cakes', 'Butterscotch Cakes', 'Vanilla Cakes', 'Chocolate Truffle', 
   'Pineapple Cakes', 'Mango Cakes', 'Strawberry Cakes', 'Red Velvet Cakes', 

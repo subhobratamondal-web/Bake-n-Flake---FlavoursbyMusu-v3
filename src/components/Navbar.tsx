@@ -171,13 +171,19 @@ export default function Navbar() {
                 return (
                   <button
                     onClick={isAdmin ? () => setIsOwnerPortalOpen(true) : undefined}
-                    className={`p-2.5 rounded-full transition-all border flex items-center justify-center ${
+                    title="Owner Admin Portal (Musu)"
+                    className={`p-1.5 rounded-full transition-all border flex items-center justify-center gap-1.5 ${
                       isAdmin 
-                        ? 'bg-amber-500 text-slate-900 border-amber-300 shadow-md cursor-pointer' 
+                        ? 'bg-amber-500 text-slate-900 border-amber-300 shadow-md cursor-pointer hover:scale-105 active:scale-95' 
                         : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-600 border-slate-200 dark:border-slate-700 cursor-default opacity-50'
                     }`}
                   >
-                    <Shield size={16} />
+                    <img 
+                      src="https://i.ibb.co/wrc3VVRg/PROFILE.jpg" 
+                      alt="Musu Bakery Owner" 
+                      className="w-6 h-6 rounded-full object-cover border border-amber-300 shadow-sm shrink-0" 
+                      referrerPolicy="no-referrer"
+                    />
                   </button>
                 );
               })()}
@@ -341,11 +347,17 @@ export default function Navbar() {
                         onClick={isAdmin ? () => { setIsOwnerPortalOpen(true); setMobileMenuOpen(false); } : undefined}
                         className={`p-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 border ${
                           isAdmin 
-                            ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 cursor-pointer' 
+                            ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/40 cursor-pointer shadow-sm' 
                             : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-600 border-slate-200 dark:border-slate-700 cursor-default opacity-50'
                         }`}
                       >
-                        <Shield size={16} />
+                        <img 
+                          src="https://i.ibb.co/wrc3VVRg/PROFILE.jpg" 
+                          alt="Musu (Owner)" 
+                          className="w-6 h-6 rounded-full object-cover border border-amber-400 shadow-sm shrink-0" 
+                          referrerPolicy="no-referrer"
+                        />
+                        <span>{lang === 'en' ? 'Owner Portal' : 'মালিক পোর্টাল'}</span>
                       </button>
                     );
                   })()}

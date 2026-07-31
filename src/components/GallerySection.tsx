@@ -54,7 +54,7 @@ const useImagePreloader = (items: any[], currentIndex: number | null, itemsToSho
 };
 import { AppContext } from '../App';
 import { flavours, gifts, moreOptionsData } from '../constants/data';
-import { ChevronLeft, ChevronRight, Cake, Heart, Sparkles, Gift, MoreHorizontal, Instagram } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Cake, Heart, Sparkles, Gift, MoreHorizontal, Instagram, ShoppingCart, Search, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import { cn } from '../lib/utils';
 
 // Components and Icons
@@ -85,7 +85,7 @@ const contactInfo = [
 ];
 
 export default function GallerySection() {
-  const { galleryData, lang, theme } = useContext(AppContext);
+  const { galleryData, lang, theme, openQuickAddToCart, toggleWishlist, isWishlisted } = useContext(AppContext);
   const [activeTab, setActiveTab] = useState<'Signature Menu' | 'Thoughtful Gifting' | 'Something More' | 'Social Feeds'>('Signature Menu');
   const [index, setIndex] = useState(0);
   const [isMobile, setIsMobile] = useState(false);
@@ -634,31 +634,65 @@ export default function GallerySection() {
                       wheel={{ step: 0.1 }}
                       pinch={{ step: 5 }}
                     >
-                      <TransformComponent wrapperClass="w-full h-full" contentClass="w-full h-full flex items-center justify-center">
-                        <motion.img
-                          key={lightboxIndex}
-                          initial={{ opacity: 0, scale: 0.7, rotate: -5 }}
-                          animate={{ opacity: 1, scale: 1, rotate: 0 }}
-                          transition={{ 
-                            type: "spring", 
-                            stiffness: 260, 
-                            damping: 20 
-                          }}
-                          src={getOptimizedImageUrl(items[lightboxIndex].img, 1000, 85) || items[lightboxIndex]?.img || "https://i.ibb.co/XkYN11bL/PROFILE.jpg"}
-                          alt={items[lightboxIndex].nameEn}
-                          className="w-full h-full object-cover"
-                          referrerPolicy="no-referrer"
-                          loading="lazy"
-                          decoding="async"
-                          onError={(e) => {
-                            const target = e.currentTarget;
-                            if (!target.dataset.triedOriginal) {
-                              target.dataset.triedOriginal = 'true';
-                              target.src = items[lightboxIndex]?.img || "https://i.ibb.co/XkYN11bL/PROFILE.jpg";
-                            }
-                          }}
-                        />
-                      </TransformComponent>
+                      {({ zoomIn, zoomOut, resetTransform }) => (
+                        <>
+                          <div className="absolute top-4 left-4 z-30 flex items-center gap-1.5 bg-black/70 backdrop-blur-md p-1.5 rounded-2xl border border-white/20 text-white shadow-xl">
+                            <button 
+                              type="button" 
+                              onClick={() => zoomIn()} 
+                              className="p-1.5 hover:bg-white/20 rounded-xl transition-all active:scale-95 cursor-pointer" 
+                              title="Zoom In"
+                            >
+                              <ZoomIn size={16} />
+                            </button>
+                            <button 
+                              type="button" 
+                              onClick={() => zoomOut()} 
+                              className="p-1.5 hover:bg-white/20 rounded-xl transition-all active:scale-95 cursor-pointer" 
+                              title="Zoom Out"
+                            >
+                              <ZoomOut size={16} />
+                            </button>
+                            <button 
+                              type="button" 
+                              onClick={() => resetTransform()} 
+                              className="p-1.5 hover:bg-white/20 rounded-xl transition-all active:scale-95 cursor-pointer" 
+                              title="Reset Zoom"
+                            >
+                              <RotateCcw size={16} />
+                            </button>
+                            <span className="text-[10px] font-black uppercase tracking-wider px-2 text-pink-300 border-l border-white/20 hidden sm:inline flex items-center gap-1">
+                              <Search size={12} /> Magnify Zoom
+                            </span>
+                          </div>
+
+                          <TransformComponent wrapperClass="w-full h-full" contentClass="w-full h-full flex items-center justify-center">
+                            <motion.img
+                              key={lightboxIndex}
+                              initial={{ opacity: 0, scale: 0.7, rotate: -5 }}
+                              animate={{ opacity: 1, scale: 1, rotate: 0 }}
+                              transition={{ 
+                                type: "spring", 
+                                stiffness: 260, 
+                                damping: 20 
+                              }}
+                              src={getOptimizedImageUrl(items[lightboxIndex].img, 1000, 85) || items[lightboxIndex]?.img || "https://i.ibb.co/XkYN11bL/PROFILE.jpg"}
+                              alt={items[lightboxIndex].nameEn}
+                              className="w-full h-full object-cover"
+                              referrerPolicy="no-referrer"
+                              loading="lazy"
+                              decoding="async"
+                              onError={(e) => {
+                                const target = e.currentTarget;
+                                if (!target.dataset.triedOriginal) {
+                                  target.dataset.triedOriginal = 'true';
+                                  target.src = items[lightboxIndex]?.img || "https://i.ibb.co/XkYN11bL/PROFILE.jpg";
+                                }
+                              }}
+                            />
+                          </TransformComponent>
+                        </>
+                      )}
                     </TransformWrapper>
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent pointer-events-none" />
                     
@@ -689,7 +723,7 @@ export default function GallerySection() {
                         <p className="text-pink-500 font-bold tracking-[0.3em] uppercase text-[9px] md:text-[10px] mb-2 md:mb-3">
                            {items[lightboxIndex].category}
                         </p>
-                        <h2 className="text-2xl md:text-5xl font-black text-slate-900 dark:text-white leading-[1.1] mb-4 md:mb-6 tracking-tighter uppercase italic">
+                        <h2 className="text-2xl md:text-4xl font-black text-slate-900 dark:text-white leading-[1.1] mb-4 md:mb-6 tracking-tighter uppercase italic">
                            {lang === 'en' ? items[lightboxIndex].nameEn : items[lightboxIndex].nameBn}
                         </h2>
                         
@@ -703,6 +737,55 @@ export default function GallerySection() {
                            <div className="w-10 md:w-12 h-1 md:h-1.5 bg-pink-500 rounded-full shadow-[0_0_15px_rgba(236,72,153,0.6)] mt-4" />
                         </div>
                       </motion.div>
+
+                      {/* Add to Cart & Wishlist Actions */}
+                      <div className="grid grid-cols-2 gap-2.5 my-4">
+                        <button 
+                          onClick={() => {
+                            const currentItem = items[lightboxIndex];
+                            setLightboxIndex(null);
+                            if (openQuickAddToCart && currentItem) {
+                              openQuickAddToCart({
+                                nameEn: currentItem.nameEn,
+                                nameBn: currentItem.nameBn,
+                                img: currentItem.img,
+                                category: currentItem.category,
+                                descEn: (currentItem as any).descEn,
+                                descBn: (currentItem as any).descBn
+                              });
+                            }
+                          }}
+                          className="py-3 px-3 bg-gradient-to-r from-pink-500 via-rose-500 to-amber-500 text-white rounded-2xl font-black uppercase tracking-widest text-[10px] sm:text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-pink-500/20 active:scale-95 transition-all cursor-pointer"
+                        >
+                           <ShoppingCart size={15} /> 
+                           {lang === 'en' ? 'Add to Cart' : 'কার্টে যোগ করুন'}
+                        </button>
+
+                        <button 
+                          onClick={() => {
+                            const currentItem = items[lightboxIndex];
+                            if (toggleWishlist && currentItem) {
+                              toggleWishlist({
+                                nameEn: currentItem.nameEn,
+                                nameBn: currentItem.nameBn,
+                                img: currentItem.img,
+                                category: currentItem.category
+                              });
+                            }
+                          }}
+                          className={cn(
+                            "py-3 px-3 rounded-2xl font-black uppercase tracking-widest text-[10px] sm:text-xs flex items-center justify-center gap-1.5 transition-all border shadow-sm cursor-pointer",
+                            isWishlisted && items[lightboxIndex] && isWishlisted(items[lightboxIndex].nameEn)
+                              ? "bg-pink-500 text-white border-pink-400"
+                              : "bg-white dark:bg-white/10 text-pink-600 dark:text-pink-400 border-pink-200 dark:border-white/20 hover:bg-pink-50"
+                          )}
+                        >
+                           <Heart size={15} className={isWishlisted && items[lightboxIndex] && isWishlisted(items[lightboxIndex].nameEn) ? "fill-white" : ""} />
+                           {isWishlisted && items[lightboxIndex] && isWishlisted(items[lightboxIndex].nameEn)
+                             ? (lang === 'en' ? 'Wishlisted' : 'উইশলিস্টেড')
+                             : (lang === 'en' ? 'Wishlist' : 'উইশলিস্ট')}
+                        </button>
+                      </div>
                     </div>
 
                     {/* Order & Assist Buttons */}

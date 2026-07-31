@@ -3,6 +3,7 @@ import { GalleryData, Product, VideoItem } from '../types';
 const SPREADSHEET_ID = '1vZsYmZzxu653U4T6O-_S0i2dazAU_VJKBRYwdgAmXSw';
 
 export const CATEGORY_SHEET_NAMES = [
+  'Tub Cakes (Tranding🔥 )', 'Tub Cakes (Tranding🔥)', 'Tub Cakes',
   'Chocolate Cakes', 'Butterscotch Cakes', 'Vanilla Cakes', 'Chocolate Truffle',
   'Pineapple Cakes', 'Mango Cakes', 'Strawberry Cakes', 'Red Velvet Cakes',
   'Fresh Fruit Cake', 'Forest Range', 'Oreo Cakes', 'Alcohol base Cake',
