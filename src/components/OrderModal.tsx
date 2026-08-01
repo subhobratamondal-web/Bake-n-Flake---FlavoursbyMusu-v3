@@ -99,6 +99,7 @@ export default function OrderModal({ isOpen, onClose, lang }: OrderModalProps) {
   }, []);
 
   const handleSubmit = async (type: 'wa' | 'messenger') => {
+    if (isSyncing) return;
     playSound('ding');
     if (!form.name || !form.deliveryDate) {
       alert(lang === 'en' ? 'Please fill in your name and delivery date' : 'আপনার নাম এবং ডেলিভারির তারিখ দিন');
@@ -132,8 +133,6 @@ export default function OrderModal({ isOpen, onClose, lang }: OrderModalProps) {
         notes: `Cake Message: ${form.message}. Req: ${form.requirements}`,
         paymentMethod: 'Cash on Delivery'
       });
-
-      await sendOrderToGoogleSheet(createdOrder);
 
       // Attempt to send order confirmation email via Gmail API if OAuth token is available
       const token = getAccessToken();

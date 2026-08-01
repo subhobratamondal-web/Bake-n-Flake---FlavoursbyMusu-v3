@@ -13,17 +13,18 @@ interface WishlistModalProps {
 export default function WishlistModal({ isOpen, onClose }: WishlistModalProps) {
   const { wishlist, toggleWishlist, openQuickAddToCart, lang, t } = useContext(AppContext);
 
-  if (!isOpen) return null;
+  // if (!isOpen) return null;
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95, y: 20 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 20 }}
-          className="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-white/10 overflow-hidden max-h-[85vh] flex flex-col"
-        >
+      {isOpen && (
+        <div className="fixed inset-0 z-[130] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            className="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-white/10 overflow-hidden max-h-[85vh] flex flex-col"
+          >
           {/* Header */}
           <div className="bg-gradient-to-r from-rose-500 via-pink-500 to-amber-500 p-6 text-white flex items-center justify-between shrink-0">
             <div className="flex items-center gap-3">
@@ -127,6 +128,7 @@ export default function WishlistModal({ isOpen, onClose }: WishlistModalProps) {
           </div>
         </motion.div>
       </div>
-    </AnimatePresence>
-  );
+    )}
+  </AnimatePresence>
+);
 }

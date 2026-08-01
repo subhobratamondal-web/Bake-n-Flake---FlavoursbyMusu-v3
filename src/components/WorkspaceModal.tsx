@@ -23,14 +23,21 @@ import {
   Clock,
   Sparkles,
   Cake,
-  Bell
+  Bell,
+  ShoppingBag,
+  Phone,
+  MessageSquare,
+  MapPin
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AppContext } from '../App';
 import { 
   initAuth, 
   googleSignIn, 
-  logoutGoogle
+  workspaceSignIn,
+  logoutGoogle,
+  auth,
+  getAccessToken
 } from '../lib/workspaceAuth';
 import { User } from 'firebase/auth';
 import { 
@@ -46,6 +53,7 @@ import {
   appendSheetRows, 
   updateSheetRange, 
   createBakeryOrdersSheet, 
+  addSheetTabToSpreadsheet,
   SpreadsheetInfo 
 } from '../utils/sheetsService';
 import {
@@ -64,26 +72,84 @@ import {
   listCalendarEvents
 } from '../utils/calendarService';
 import { CelebrationEvent, getStoredCelebrations } from './CelebrationsModal';
+import { Order, OrderStatus, CartItem } from '../types';
+import { generateWhatsAppStatusUpdateLink, TARGET_GOOGLE_SHEET_ID } from '../utils/googleSheetsSync';
+import OptimizedImage from './OptimizedImage';
 
 interface WorkspaceModalProps {
   isOpen: boolean;
   onClose: () => void;
+  orders?: Order[];
+  onUpdateStatus?: (orderId: string, status: OrderStatus) => void;
+  onUpdateOrder?: (updatedOrder: Order) => void;
+}
+
+const ALL_STATUSES: OrderStatus[] = ['Pending', 'Confirmed', 'Preparing', 'Out for Delivery', 'Delivered', 'Cancelled'];
+
+export function parseSpreadsheetInput(input: string, fallbackSpreadsheetId = DEFAULT_SPREADSHEET_ID): {
+  spreadsheetId: string;
+  gid?: number;
+} {
+  if (!input || !input.trim()) {
+    return { spreadsheetId: fallbackSpreadsheetId };
+  }
+  const str = input.trim();
+
+  let spreadsheetId = '';
+  let gid: number | undefined = undefined;
+
+  // 1. Try to extract spreadsheet ID from URL /d/([a-zA-Z0-9_-]+)
+  const urlMatch = str.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  if (urlMatch && urlMatch[1]) {
+    spreadsheetId = urlMatch[1];
+  }
+
+  // 2. Try to extract GID parameter gid=([0-9]+) or #gid=([0-9]+)
+  const gidMatch = str.match(/[?#&]gid=([0-9]+)/) || str.match(/gid=([0-9]+)/);
+  if (gidMatch && gidMatch[1]) {
+    gid = parseInt(gidMatch[1], 10);
+  }
+
+  // 3. If str is purely numeric (e.g. "1527393898"), it's a GID!
+  if (/^[0-9]+$/.test(str)) {
+    gid = parseInt(str, 10);
+  }
+
+  // 4. If no spreadsheet ID extracted from URL, check if str itself looks like a valid spreadsheet ID
+  if (!spreadsheetId) {
+    if (str.length >= 20 && !/^[0-9]+$/.test(str)) {
+      spreadsheetId = str;
+    } else {
+      spreadsheetId = fallbackSpreadsheetId;
+    }
+  }
+
+  return { spreadsheetId, gid };
+}
+
+export function cleanSpreadsheetId(input: string): string {
+  return parseSpreadsheetInput(input).spreadsheetId;
 }
 
 const DEFAULT_SPREADSHEET_ID = '1vZsYmZzxu653U4T6O-_S0i2dazAU_VJKBRYwdgAmXSw';
 
 const UPCOMING_HOLIDAYS = [
-  { name: 'Durga Puja Festival', date: '2026-10-18', desc: 'Pre-order festive sweets & special tiered cakes' },
+  { name: 'Independence Day', date: '2026-08-15', desc: 'National celebration cakes & tricolor theme desserts' },
+  { name: 'Raksha Bandhan', date: '2026-08-28', desc: 'Customized gift hampers & gourmet chocolate boxes' },
+  { name: 'Durga Puja (Saptami)', date: '2026-10-18', desc: 'Festive Bengali sweets & special themed cakes' },
+  { name: 'Durga Puja (Ashtami)', date: '2026-10-19', desc: 'Grand puja platters & traditional fusion desserts' },
+  { name: 'Bijoya Dashami', date: '2026-10-21', desc: 'Gift boxes for relatives & sweet distribution' },
   { name: 'Diwali & Kali Puja', date: '2026-11-08', desc: 'Artisan mithai boxes & fusion dessert platters' },
+  { name: 'Bhai Phonta', date: '2026-11-10', desc: 'Special cupcakes & personalized hampers for brothers' },
   { name: 'Christmas Eve & Day', date: '2026-12-25', desc: 'Traditional plum cakes & gingerbread houses' },
   { name: 'New Year Celebration', date: '2027-01-01', desc: 'Midnight celebration cakes & champagne cupcakes' },
   { name: "Valentine's Special", date: '2027-02-14', desc: 'Red velvet heart cakes & custom macarons' }
 ];
 
-export default function WorkspaceModal({ isOpen, onClose }: WorkspaceModalProps) {
-  const { lang, orders, galleryData } = useContext(AppContext);
+export default function WorkspaceModal({ isOpen, onClose, orders = [], onUpdateStatus, onUpdateOrder }: WorkspaceModalProps) {
+  const { lang, galleryData, user, setIsAdminLoggedIn } = useContext(AppContext);
 
-  const [activeTab, setActiveTab] = useState<'drive' | 'sheets' | 'gmail' | 'tasks' | 'calendar'>('drive');
+  const [activeTab, setActiveTab] = useState<'orders' | 'drive' | 'sheets' | 'gmail' | 'tasks' | 'calendar'>('orders');
   const [googleUser, setGoogleUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -103,6 +169,8 @@ export default function WorkspaceModal({ isOpen, onClose }: WorkspaceModalProps)
   const [sheetRows, setSheetRows] = useState<(string | number)[][]>([]);
   const [loadingSheet, setLoadingSheet] = useState(false);
   const [isCreatingSheet, setIsCreatingSheet] = useState(false);
+  const [newSubsheetTitle, setNewSubsheetTitle] = useState('');
+  const [showAddSubsheet, setShowAddSubsheet] = useState(false);
 
   // Gmail States
   const [testEmailTo, setTestEmailTo] = useState('');
@@ -140,25 +208,69 @@ export default function WorkspaceModal({ isOpen, onClose }: WorkspaceModalProps)
 
   const [notification, setNotification] = useState<string | null>(null);
 
+  // Order Management States
+  const [filterStatus, setFilterStatus] = useState<string>('All');
+  const [orderSearchQuery, setOrderSearchQuery] = useState('');
+  const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
+  const [editTotal, setEditTotal] = useState<number>(0);
+  const [editItems, setEditItems] = useState<{ id: string; productNameEn: string; productNameBn: string; weight: string; quantity: number; price: number; img: string }[]>([]);
+  const [emailNotice, setEmailNotice] = useState<string>('');
+
   const showNotification = (msg: string) => {
     setNotification(msg);
     setTimeout(() => setNotification(null), 4000);
   };
 
-  // Initialize Auth Listener
+  // Initialize Auth Listener & Auto-connect for Admin & Google Workspace Sync
   useEffect(() => {
+    const activeTok = getAccessToken();
+    if (activeTok) {
+      setToken(activeTok);
+    }
     const unsubscribe = initAuth(
-      (user, cachedToken) => {
-        setGoogleUser(user);
-        setToken(cachedToken);
+      (gUser, cachedToken) => {
+        setGoogleUser(gUser);
+        const tok = cachedToken || getAccessToken();
+        if (tok) {
+          setToken(tok);
+        }
       },
       () => {
-        setGoogleUser(null);
-        setToken(null);
+        const tok = getAccessToken();
+        if (tok) {
+          setToken(tok);
+          if (auth.currentUser) setGoogleUser(auth.currentUser);
+        } else if (user?.role === 'admin') {
+          if (auth.currentUser) {
+            setGoogleUser(auth.currentUser);
+          }
+        }
       }
     );
     return () => unsubscribe();
-  }, []);
+  }, [user]);
+
+  // Auto-connect and sync token when Workspace Modal opens
+  useEffect(() => {
+    if (isOpen) {
+      const realToken = getAccessToken();
+      if (realToken) {
+        setToken(realToken);
+      }
+      if (user?.role === 'admin' && !googleUser) {
+        if (auth.currentUser) {
+          setGoogleUser(auth.currentUser);
+        } else {
+          const mockAdminUser = {
+            displayName: user.name || 'Bake n\' Flake Owner',
+            email: user.email || 'subhobratamondal@gmail.com',
+            photoURL: 'https://i.ibb.co/Xx2kxrrg/LOGO-1.png'
+          } as any;
+          setGoogleUser(mockAdminUser);
+        }
+      }
+    }
+  }, [isOpen, user, googleUser]);
 
   // Sync default user email when googleUser updates
   useEffect(() => {
@@ -169,23 +281,24 @@ export default function WorkspaceModal({ isOpen, onClose }: WorkspaceModalProps)
 
   // Fetch data when active tab changes or modal opens
   useEffect(() => {
-    if (isOpen && token) {
+    const activeTok = token || getAccessToken();
+    if (isOpen && activeTok && activeTok !== 'admin_active_session') {
       if (activeTab === 'drive') fetchDriveFiles();
       else if (activeTab === 'sheets') fetchSheetData();
       else if (activeTab === 'tasks') fetchTasksData();
       else if (activeTab === 'calendar') fetchCalendarData();
     }
-  }, [isOpen, token, activeTab, spreadsheetId]);
+  }, [isOpen, token, activeTab]);
 
   const handleLogin = async () => {
     setIsLoggingIn(true);
     setAuthError(null);
     try {
-      const res = await googleSignIn();
+      const res = await workspaceSignIn();
       if (res) {
         setGoogleUser(res.user);
         setToken(res.accessToken);
-        showNotification(lang === 'en' ? 'Signed in with Google successfully!' : 'গুগল সাইন-ইন সফল হয়েছে!');
+        showNotification(lang === 'en' ? 'Signed in with Workspace permissions!' : 'গুগল ওয়ার্কস্পেস পারমিশনসহ সাইন-ইন সফল হয়েছে!');
       }
     } catch (err: any) {
       console.error('Login error:', err);
@@ -207,16 +320,91 @@ export default function WorkspaceModal({ isOpen, onClose }: WorkspaceModalProps)
     showNotification(lang === 'en' ? 'Signed out of Google' : 'গুগল সেশন শেষ হয়েছে');
   };
 
+  // --- ORDER MANAGEMENT OPERATIONS ---
+  const startEditing = (order: Order) => {
+    setEditingOrderId(order.id);
+    const items = order.items.map(it => ({
+      id: it.id || 'it_' + Math.random().toString(36).substring(2, 6),
+      productNameEn: it.productNameEn,
+      productNameBn: it.productNameBn || it.productNameEn,
+      weight: it.weight || '1 Pound',
+      quantity: it.quantity || 1,
+      price: it.price || 450,
+      img: it.img || ''
+    }));
+    setEditItems(items);
+    const calcSum = items.reduce((sum, it) => sum + (it.price * it.quantity), 0);
+    setEditTotal(order.total || calcSum);
+  };
+
+  const updateItemsAndTotal = (newItems: typeof editItems) => {
+    setEditItems(newItems);
+    const calcSum = newItems.reduce((sum, it) => sum + ((Number(it.price) || 0) * (Number(it.quantity) || 1)), 0);
+    setEditTotal(calcSum);
+  };
+
+  const handleSaveEdit = (order: Order, overrideStatus?: OrderStatus) => {
+    const finalItems = editItems as CartItem[];
+    const computedTotal = editItems.reduce((acc, it) => acc + ((Number(it.price) || 0) * (Number(it.quantity) || 1)), 0);
+    const finalTotal = editTotal > 0 ? editTotal : computedTotal;
+
+    const updatedOrder: Order = {
+      ...order,
+      items: finalItems,
+      total: finalTotal,
+      subtotal: finalTotal,
+      status: overrideStatus || order.status
+    };
+
+    if (onUpdateOrder) {
+      onUpdateOrder(updatedOrder);
+    }
+    setEditingOrderId(null);
+  };
+
+  const handleStatusChange = async (order: Order, newStatus: OrderStatus) => {
+    if (editingOrderId === order.id) {
+      handleSaveEdit(order, newStatus);
+    } else {
+      if (onUpdateStatus) onUpdateStatus(order.id, newStatus);
+    }
+
+    if (order.customerEmail && order.customerEmail.includes('@')) {
+      const activeToken = getAccessToken();
+      if (activeToken) {
+        try {
+          await sendStatusUpdateEmail(activeToken, order, newStatus);
+          setEmailNotice(lang === 'en' ? `Status updated & confirmation email sent to ${order.customerEmail}` : `অর্ডার স্ট্যাটাস আপডেট ও ${order.customerEmail}-এ ইমেইল পাঠানো হয়েছে!`);
+          setTimeout(() => setEmailNotice(''), 4000);
+        } catch (err) {
+          console.warn('Gmail API error:', err);
+        }
+      }
+    }
+  };
+
+  const filteredOrders = orders.filter((o) => {
+    const matchesStatus = filterStatus === 'All' || o.status === filterStatus;
+    const matchesSearch = 
+      o.id.toLowerCase().includes(orderSearchQuery.toLowerCase()) ||
+      o.customerName.toLowerCase().includes(orderSearchQuery.toLowerCase()) ||
+      o.customerPhone.includes(orderSearchQuery);
+    return matchesStatus && matchesSearch;
+  });
+
   // --- DRIVE OPERATIONS ---
   const fetchDriveFiles = async () => {
-    if (!token) return;
+    if (!token || token === 'admin_active_session') return;
     setLoadingDrive(true);
     try {
       const files = await listDriveFiles(token, driveSearch);
       setDriveFiles(files);
     } catch (err: any) {
-      console.error('Error fetching drive files:', err);
-      showNotification('Failed to fetch Drive files. Re-authentication may be needed.');
+      console.warn('Error fetching drive files:', err?.message || err);
+      if (err?.message?.includes('401') || err?.message?.includes('UNAUTHENTICATED')) {
+        setToken(null);
+      }
+      showNotification('Sign in with Google Workspace to sync Google Drive files.');
     } finally {
       setLoadingDrive(false);
     }
@@ -289,25 +477,96 @@ export default function WorkspaceModal({ isOpen, onClose }: WorkspaceModalProps)
   };
 
   // --- SHEETS OPERATIONS ---
-  const fetchSheetData = async () => {
-    if (!token) return;
+  const fetchSheetData = async (targetTab?: string, customSpreadsheetInput?: string) => {
+    if (!token || token === 'admin_active_session') return;
     setLoadingSheet(true);
+    setSheetRows([]); // Clear previous rows so stale data is never shown
     try {
-      const details = await getSpreadsheetDetails(token, spreadsheetId);
-      setSheetDetails(details);
-
-      let targetTitle = selectedSheetTitle;
-      if (details.sheets.length > 0 && !details.sheets.some(s => s.title.toLowerCase() === selectedSheetTitle.toLowerCase())) {
-        targetTitle = details.sheets[0].title;
-        setSelectedSheetTitle(targetTitle);
+      const { spreadsheetId: activeId, gid } = parseSpreadsheetInput(customSpreadsheetInput || spreadsheetId);
+      if (!activeId) {
+        showNotification(lang === 'en' ? 'Please enter a valid Google Spreadsheet ID.' : 'সঠিক গুগল শিট আইডি প্রদান করুন');
+        setLoadingSheet(false);
+        return;
       }
 
-      const rowsData = await getSheetValues(token, spreadsheetId, `'${targetTitle}'!A1:M50`);
-      setSheetRows(rowsData.values);
+      // If user pasted a URL or clean ID, normalize input state if needed
+      if (customSpreadsheetInput && customSpreadsheetInput.includes('/d/')) {
+        setSpreadsheetId(activeId);
+      }
+
+      const details = await getSpreadsheetDetails(token, activeId);
+      setSheetDetails(details);
+
+      let targetTitle = targetTab || selectedSheetTitle;
+
+      // If a numeric GID was provided in URL or input, find matching sheet title
+      if (gid !== undefined && details.sheets && details.sheets.length > 0) {
+        const gidMatched = details.sheets.find(s => s.sheetId === gid);
+        if (gidMatched) {
+          targetTitle = gidMatched.title;
+        }
+      }
+
+      // Verify targetTitle in sheets list
+      if (details.sheets && details.sheets.length > 0) {
+        const found = details.sheets.find(s => s.title.toLowerCase() === targetTitle.toLowerCase());
+        if (found) {
+          targetTitle = found.title; // exact title casing from Google Sheet
+        } else if (gid === undefined && !targetTab) {
+          targetTitle = details.sheets[0].title;
+        }
+      }
+
+      setSelectedSheetTitle(targetTitle);
+
+      const safeRange = `'${targetTitle.replace(/'/g, "''")}'!A1:M100`;
+      const rowsData = await getSheetValues(token, activeId, safeRange);
+      setSheetRows(rowsData.values || []);
     } catch (err: any) {
-      console.error('Error fetching sheet:', err);
-      showNotification('Failed to load Google Sheet data. Verify Spreadsheet ID and permissions.');
+      console.warn('Error fetching sheet:', err?.message || err);
+      if (err?.message?.includes('401') || err?.message?.includes('UNAUTHENTICATED')) {
+        setToken(null);
+      }
+      showNotification(lang === 'en' ? 'Failed to load Google Sheet data. Check Spreadsheet ID and permissions.' : 'গুগল শিট ডাটা লোড করতে ব্যর্থ। ID ও পারমিশন চেক করুন।');
+      setSheetRows([]);
     } finally {
+      setLoadingSheet(false);
+    }
+  };
+
+  const handleSelectSubsheet = async (sheetTitle: string) => {
+    setSelectedSheetTitle(sheetTitle);
+    if (!token || token === 'admin_active_session') return;
+    setLoadingSheet(true);
+    setSheetRows([]); // Clear previous rows so stale data is never shown
+    try {
+      const activeId = cleanSpreadsheetId(spreadsheetId);
+      const safeRange = `'${sheetTitle.replace(/'/g, "''")}'!A1:M100`;
+      const rowsData = await getSheetValues(token, activeId, safeRange);
+      setSheetRows(rowsData.values || []);
+    } catch (err: any) {
+      console.warn(`Error loading subsheet '${sheetTitle}':`, err);
+      showNotification(lang === 'en' ? `Failed to load '${sheetTitle}': ${err.message || err}` : `'${sheetTitle}' সাবশিট লোড করা যায়নি`);
+      setSheetRows([]);
+    } finally {
+      setLoadingSheet(false);
+    }
+  };
+
+  const handleAddSubsheet = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token || !newSubsheetTitle.trim()) return;
+    const activeId = cleanSpreadsheetId(spreadsheetId);
+    setLoadingSheet(true);
+    try {
+      const titleToCreate = newSubsheetTitle.trim();
+      await addSheetTabToSpreadsheet(token, activeId, titleToCreate);
+      showNotification(lang === 'en' ? `Subsheet '${titleToCreate}' created successfully!` : `'${titleToCreate}' সাবশিট সফলভাবে তৈরি হয়েছে!`);
+      setNewSubsheetTitle('');
+      setShowAddSubsheet(false);
+      await fetchSheetData(titleToCreate, activeId);
+    } catch (err: any) {
+      showNotification(`Failed to add subsheet: ${err.message}`);
       setLoadingSheet(false);
     }
   };
@@ -396,14 +655,17 @@ export default function WorkspaceModal({ isOpen, onClose }: WorkspaceModalProps)
 
   // --- GOOGLE TASKS OPERATIONS ---
   const fetchTasksData = async () => {
-    if (!token) return;
+    if (!token || token === 'admin_active_session') return;
     setLoadingTasks(true);
     try {
       const items = await listGoogleTasks(token);
       setTasksList(items);
     } catch (err: any) {
-      console.error('Error fetching tasks:', err);
-      showNotification('Failed to fetch tasks from Google Tasks.');
+      console.warn('Error fetching tasks:', err?.message || err);
+      if (err?.message?.includes('401') || err?.message?.includes('UNAUTHENTICATED')) {
+        setToken(null);
+      }
+      showNotification('Sign in with Google Workspace to sync Google Tasks.');
     } finally {
       setLoadingTasks(false);
     }
@@ -435,14 +697,17 @@ export default function WorkspaceModal({ isOpen, onClose }: WorkspaceModalProps)
 
   // --- GOOGLE CALENDAR OPERATIONS ---
   const fetchCalendarData = async () => {
-    if (!token) return;
+    if (!token || token === 'admin_active_session') return;
     setLoadingCalendar(true);
     try {
       const events = await listCalendarEvents(token);
       setCalendarEvents(events);
     } catch (err: any) {
-      console.error('Error fetching calendar events:', err);
-      showNotification('Failed to load Google Calendar events.');
+      console.warn('Error fetching calendar events:', err?.message || err);
+      if (err?.message?.includes('401') || err?.message?.includes('UNAUTHENTICATED')) {
+        setToken(null);
+      }
+      showNotification('Sign in with Google Workspace to sync Google Calendar events.');
     } finally {
       setLoadingCalendar(false);
     }
@@ -493,30 +758,134 @@ export default function WorkspaceModal({ isOpen, onClose }: WorkspaceModalProps)
         showNotification(lang === 'en' ? 'File deleted successfully from Google Drive.' : 'ফাইলটি গুগল ড্রাইভ থেকে মোছা হয়েছে');
         fetchDriveFiles();
       } else if (actionType === 'sync_orders') {
-        const rowsToAppend = orders.map(o => [
-          new Date(o.timestamp).toLocaleString('en-IN'),
-          o.id,
-          o.customerName || 'Customer',
-          o.customerPhone || '',
-          o.customerEmail || '',
-          o.items.map(i => `${i.productNameEn} (x${i.quantity})`).join(', '),
-          o.subtotal || o.total,
-          o.total,
-          o.deliveryDate || '',
-          o.deliveryAddress || '',
-          o.status,
-          o.paymentMethod || 'Cash on Delivery',
-          o.notes || ''
-        ]);
-        await appendSheetRows(token, spreadsheetId, `'${selectedSheetTitle}'!A:M`, rowsToAppend);
-        showNotification(lang === 'en' ? `Synced ${orders.length} orders to Google Sheets!` : 'শিটে সফলভাবে যোগ করা হয়েছে!');
-        fetchSheetData();
+        const activeId = cleanSpreadsheetId(spreadsheetId);
+        const safeSheetName = selectedSheetTitle.replace(/'/g, "''");
+
+        // 1. Fetch current rows of selected subsheet to detect existing Order IDs
+        let currentRows: (string | number)[][] = [];
+        try {
+          const fetched = await getSheetValues(token, activeId, `'${safeSheetName}'!A1:M300`);
+          currentRows = fetched.values || [];
+        } catch (err) {
+          console.warn('Notice fetching current rows before sync:', err);
+          currentRows = sheetRows;
+        }
+
+        // Map existing Order IDs to their row indices (1-indexed for Google Sheets)
+        const existingOrderRowMap = new Map<string, number>();
+        currentRows.forEach((row, idx) => {
+          const rowNum = idx + 1;
+          // Column B (index 1) is Order ID
+          if (row[1] !== undefined && row[1] !== null) {
+            const idVal = String(row[1]).trim().toLowerCase();
+            if (idVal.length > 0) {
+              existingOrderRowMap.set(idVal, rowNum);
+            }
+          }
+          // Also scan cells specifically for Order ID patterns (#bnf-... or order-...)
+          row.forEach(cell => {
+            if (cell && typeof cell === 'string') {
+              const trimmed = cell.trim().toLowerCase();
+              if (trimmed.startsWith('#bnf-') || trimmed.startsWith('order-')) {
+                existingOrderRowMap.set(trimmed, rowNum);
+              }
+            }
+          });
+        });
+
+        const newOrdersToAppend: typeof orders = [];
+        let updatedCount = 0;
+
+        for (const o of orders) {
+          const normId = o.id.trim().toLowerCase();
+          const existingRowIdx = existingOrderRowMap.get(normId);
+
+          const rowValues = [
+            new Date(o.timestamp).toLocaleString('en-IN'),
+            o.id,
+            o.customerName || 'Customer',
+            o.customerPhone || '',
+            o.customerEmail || '',
+            o.items.map(i => `${i.productNameEn} (x${i.quantity})`).join(', '),
+            o.subtotal || o.total,
+            o.total,
+            o.deliveryDate || '',
+            o.deliveryAddress || '',
+            o.status,
+            o.paymentMethod || 'Cash on Delivery',
+            o.notes || ''
+          ];
+
+          if (existingRowIdx) {
+            // Update existing row if order is already present
+            try {
+              const cellRange = `'${safeSheetName}'!A${existingRowIdx}:M${existingRowIdx}`;
+              await updateSheetRange(token, activeId, cellRange, [rowValues]);
+              updatedCount++;
+            } catch (uErr) {
+              console.warn(`Failed to update existing row ${existingRowIdx}:`, uErr);
+            }
+          } else {
+            // New order to append
+            newOrdersToAppend.push(o);
+          }
+        }
+
+        // Append new orders if any
+        if (newOrdersToAppend.length > 0) {
+          const rowsToAppend = newOrdersToAppend.map(o => [
+            new Date(o.timestamp).toLocaleString('en-IN'),
+            o.id,
+            o.customerName || 'Customer',
+            o.customerPhone || '',
+            o.customerEmail || '',
+            o.items.map(i => `${i.productNameEn} (x${i.quantity})`).join(', '),
+            o.subtotal || o.total,
+            o.total,
+            o.deliveryDate || '',
+            o.deliveryAddress || '',
+            o.status,
+            o.paymentMethod || 'Cash on Delivery',
+            o.notes || ''
+          ]);
+          await appendSheetRows(token, activeId, `'${safeSheetName}'!A:M`, rowsToAppend);
+        }
+
+        // Show friendly status message
+        if (newOrdersToAppend.length > 0 && updatedCount > 0) {
+          showNotification(
+            lang === 'en'
+              ? `Synced ${newOrdersToAppend.length} new order(s) and updated ${updatedCount} existing record(s) in '${selectedSheetTitle}'!`
+              : `'${selectedSheetTitle}' সাবশিটে ${newOrdersToAppend.length}টি নতুন অর্ডার যোগ ও ${updatedCount}টি রিকর্ড আপডেট হয়েছে (কোনো ডুপ্লিকেট হয়নি)!`
+          );
+        } else if (newOrdersToAppend.length > 0) {
+          showNotification(
+            lang === 'en'
+              ? `Synced ${newOrdersToAppend.length} new order(s) to '${selectedSheetTitle}' (Duplicates skipped)!`
+              : `'${selectedSheetTitle}' সাবশিটে ${newOrdersToAppend.length}টি নতুন অর্ডার যোগ করা হয়েছে!`
+          );
+        } else if (updatedCount > 0) {
+          showNotification(
+            lang === 'en'
+              ? `Updated ${updatedCount} existing order record(s) in '${selectedSheetTitle}'. No duplicate rows added.`
+              : `'${selectedSheetTitle}' সাবশিটে ${updatedCount}টি অর্ডার রেকর্ড আপ-টু-ডেট করা হয়েছে। ডুপ্লিকেট তৈরি হয়নি।`
+          );
+        } else {
+          showNotification(
+            lang === 'en'
+              ? `All ${orders.length} order(s) are already synced in '${selectedSheetTitle}'. No duplicates created.`
+              : `সকল ${orders.length}টি অর্ডার ইতিমধ্যে '${selectedSheetTitle}' সাবশিটে সঠিক রয়েছে। ডুপ্লিকেট তৈরি হয়নি।`
+          );
+        }
+
+        fetchSheetData(selectedSheetTitle, activeId);
       } else if (actionType === 'update_sheet_row' && payload) {
+        const activeId = cleanSpreadsheetId(spreadsheetId);
         const { rowIndex, nextStatus } = payload;
         const cellRange = `'${selectedSheetTitle}'!K${rowIndex + 1}`;
-        await updateSheetRange(token, spreadsheetId, cellRange, [[nextStatus]]);
+        await updateSheetRange(token, activeId, cellRange, [[nextStatus]]);
         showNotification(lang === 'en' ? `Updated status to "${nextStatus}" in Google Sheet!` : 'স্ট্যাটাস পরিবর্তন হয়েছে!');
-        fetchSheetData();
+        fetchSheetData(selectedSheetTitle, activeId);
       } else if (actionType === 'send_test_email') {
         setIsSendingEmail(true);
         await sendGmailMessage(token, testEmailTo, testEmailSubject, testEmailBody);
@@ -542,17 +911,18 @@ export default function WorkspaceModal({ isOpen, onClose }: WorkspaceModalProps)
     }
   };
 
-  if (!isOpen) return null;
+  // if (!isOpen) return null;
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-4 md:p-6 bg-black/60 backdrop-blur-md">
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.95, y: 15 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 15 }}
-          className="relative w-full max-w-5xl bg-white dark:bg-[#0f172a] rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col max-h-[90vh]"
-        >
+      {isOpen && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-4 md:p-6 bg-black/60 backdrop-blur-md">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95, y: 15 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 15 }}
+            className="relative w-full max-w-5xl bg-white dark:bg-[#0f172a] rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden flex flex-col max-h-[90vh]"
+          >
           {/* Top Bar Header */}
           <div className="p-4 sm:p-6 bg-slate-50 dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-3">
@@ -689,6 +1059,18 @@ export default function WorkspaceModal({ isOpen, onClose }: WorkspaceModalProps)
             {/* Navigation Tabs Bar */}
             <div className="flex overflow-x-auto border-b border-slate-200 dark:border-slate-800 gap-2 sm:gap-4 no-scrollbar">
               <button
+                onClick={() => setActiveTab('orders')}
+                className={`pb-3 px-2 text-xs sm:text-sm font-bold flex items-center gap-1.5 border-b-2 transition-all whitespace-nowrap ${
+                  activeTab === 'orders'
+                    ? 'border-emerald-500 text-emerald-600 dark:text-emerald-400'
+                    : 'border-transparent text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+              >
+                <ShoppingBag size={16} />
+                Manage Orders
+              </button>
+
+              <button
                 onClick={() => setActiveTab('drive')}
                 className={`pb-3 px-2 text-xs sm:text-sm font-bold flex items-center gap-1.5 border-b-2 transition-all whitespace-nowrap ${
                   activeTab === 'drive'
@@ -748,6 +1130,313 @@ export default function WorkspaceModal({ isOpen, onClose }: WorkspaceModalProps)
                 Calendar
               </button>
             </div>
+
+            {/* TAB: ORDERS (Integrated Admin Portal) */}
+            {activeTab === 'orders' && (
+              <div className="space-y-6">
+                {/* Email Notification Notice */}
+                {emailNotice && (
+                  <div className="p-3 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs font-bold rounded-2xl text-center shadow-sm flex items-center justify-center gap-2 animate-fade-in">
+                    <CheckCircle2 size={16} className="text-emerald-600 dark:text-emerald-400" />
+                    <span>{emailNotice}</span>
+                  </div>
+                )}
+
+                {/* Controls Bar */}
+                <div className="flex flex-wrap gap-3 items-center justify-between">
+                  {/* Search */}
+                  <div className="relative flex-1 min-w-[200px]">
+                    <Search size={16} className="absolute left-3 top-3 text-slate-400" />
+                    <input 
+                      type="text"
+                      value={orderSearchQuery}
+                      onChange={(e) => setOrderSearchQuery(e.target.value)}
+                      placeholder={lang === 'en' ? 'Search Order ID / Customer Name / Phone...' : 'অর্ডার আইডি / নাম / মোবাইল খুজুন...'}
+                      className="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs dark:text-white focus:outline-none focus:ring-2 focus:ring-pink-500"
+                    />
+                  </div>
+
+                  {/* Filter Tabs */}
+                  <div className="flex items-center gap-1 overflow-x-auto max-w-full pb-1">
+                    <button
+                      type="button"
+                      onClick={() => setFilterStatus('All')}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                        filterStatus === 'All' 
+                          ? 'bg-pink-500 text-white shadow-md' 
+                          : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                      }`}
+                    >
+                      All ({orders.length})
+                    </button>
+                    {ALL_STATUSES.map((st) => {
+                      const count = orders.filter((o) => o.status === st).length;
+                      return (
+                        <button
+                          key={st}
+                          type="button"
+                          onClick={() => setFilterStatus(st)}
+                          className={`px-2.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+                            filterStatus === st 
+                              ? 'bg-pink-500 text-white shadow-md' 
+                              : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
+                          }`}
+                        >
+                          {st} ({count})
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Orders List */}
+                <div className="space-y-4">
+                  {filteredOrders.length === 0 ? (
+                    <div className="py-20 text-center text-slate-400 font-medium bg-slate-50 dark:bg-slate-900/40 rounded-3xl border border-dashed border-slate-200 dark:border-slate-800">
+                      {lang === 'en' ? 'No orders match your filter.' : 'কোন অর্ডার মেলেনি।'}
+                    </div>
+                  ) : (
+                    filteredOrders.map((order) => {
+                      const isDeliveredLocked = order.status === 'Delivered';
+                      const waStatusLink = generateWhatsAppStatusUpdateLink(order, order.status);
+
+                      return (
+                        <div 
+                          key={order.id}
+                          className={`p-5 rounded-2xl border shadow-sm hover:shadow-md transition-all space-y-4 ${
+                            isDeliveredLocked 
+                              ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800/40' 
+                              : 'bg-white dark:bg-slate-800/90 border-slate-200 dark:border-slate-700'
+                          }`}
+                        >
+                          {/* Top Header */}
+                          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-700 pb-3">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-black text-pink-600 dark:text-pink-400">
+                                  {order.id}
+                                </span>
+                                <span className="text-[10px] text-slate-400">
+                                  • {new Date(order.timestamp).toLocaleString()}
+                                </span>
+                                {isDeliveredLocked && (
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500 text-white flex items-center gap-1">
+                                    <ShieldCheck size={10} /> {lang === 'en' ? 'Delivered & Locked' : 'ডেলিভার্ড ও লকড'}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-sm font-bold text-slate-800 dark:text-white mt-1 flex items-center gap-2">
+                                {order.customerName}
+                                <a 
+                                  href={`tel:${order.customerPhone}`} 
+                                  className="text-xs text-slate-500 hover:text-pink-500 font-normal flex items-center gap-1"
+                                >
+                                  <Phone size={12} /> {order.customerPhone}
+                                </a>
+                              </div>
+                            </div>
+
+                            {/* Status Select & Dynamic WhatsApp Message */}
+                            <div className="flex flex-wrap items-center gap-2">
+                              {/* Edit Button for Pending Orders */}
+                              {order.status === 'Pending' && editingOrderId !== order.id && (
+                                <button
+                                  type="button"
+                                  onClick={() => startEditing(order)}
+                                  className="py-1.5 px-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs flex items-center gap-1 shadow-sm transition-all"
+                                  title="Edit Items & Final Price"
+                                >
+                                  <RefreshCw size={14} />
+                                  {lang === 'en' ? 'Edit Details' : 'ডাটা এডিট করুন'}
+                                </button>
+                              )}
+
+                              {/* Status Select (Disabled if Delivered) */}
+                              <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-700 p-1 rounded-xl">
+                                <span className="text-[10px] uppercase font-bold text-slate-400 pl-2">Status:</span>
+                                <select
+                                  value={order.status}
+                                  disabled={isDeliveredLocked}
+                                  onChange={(e) => handleStatusChange(order, e.target.value as OrderStatus)}
+                                  className={`text-xs font-bold px-2 py-1 rounded-lg border focus:outline-none ${
+                                    isDeliveredLocked 
+                                      ? 'bg-slate-200 text-slate-500 dark:bg-slate-800 dark:text-slate-400 border-slate-300 dark:border-slate-700 cursor-not-allowed' 
+                                      : 'bg-white dark:bg-slate-800 text-slate-800 dark:text-white border-slate-200 dark:border-slate-600'
+                                  }`}
+                                >
+                                  {ALL_STATUSES.map((s) => (
+                                    <option key={s} value={s}>{s}</option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              {/* WhatsApp Link Button */}
+                              <a
+                                href={waStatusLink}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="py-1.5 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-emerald-500/20 transition-all"
+                              >
+                                <MessageSquare size={14} />
+                                {lang === 'en' ? `WhatsApp (${order.status})` : `হোয়াটসঅ্যাপ মেসেজ (${order.status})`}
+                              </a>
+                            </div>
+                          </div>
+
+                          {/* Order Details OR Edit Form */}
+                          {editingOrderId === order.id && order.status === 'Pending' ? (
+                            <div className="p-4 bg-amber-50/70 dark:bg-amber-950/30 rounded-2xl border-2 border-amber-400/60 space-y-3 text-xs">
+                              <div className="flex items-center justify-between font-bold text-amber-900 dark:text-amber-300 border-b border-amber-200 dark:border-amber-800/60 pb-2">
+                                <span className="flex items-center gap-1.5">
+                                  <RefreshCw size={15} />
+                                  {lang === 'en' ? 'Edit Pending Order Items & Price' : 'পেন্ডিং অর্ডারের দাম ও আইটেম এডিট করুন'}
+                                </span>
+                              </div>
+
+                              {/* Items Edit List */}
+                              <div className="space-y-2">
+                                {editItems.map((item, idx) => (
+                                  <div key={item.id || idx} className="grid grid-cols-12 gap-1.5 items-center bg-white dark:bg-slate-900 p-2 rounded-xl border border-amber-200 dark:border-slate-700">
+                                    <input
+                                      type="text"
+                                      value={item.productNameEn}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        setEditItems(prev => prev.map((it, i) => i === idx ? { ...it, productNameEn: val, productNameBn: val } : it));
+                                      }}
+                                      className="col-span-4 px-2 py-1 bg-slate-50 dark:bg-slate-800 border rounded-lg text-xs font-semibold"
+                                    />
+                                    <input
+                                      type="text"
+                                      value={item.weight}
+                                      onChange={(e) => {
+                                        const val = e.target.value;
+                                        setEditItems(prev => prev.map((it, i) => i === idx ? { ...it, weight: val } : it));
+                                      }}
+                                      className="col-span-3 px-2 py-1 bg-slate-50 dark:bg-slate-800 border rounded-lg text-xs font-semibold"
+                                    />
+                                    <input
+                                      type="number"
+                                      min="1"
+                                      value={item.quantity}
+                                      onChange={(e) => {
+                                        const val = parseInt(e.target.value) || 1;
+                                        updateItemsAndTotal(editItems.map((it, i) => i === idx ? { ...it, quantity: val } : it));
+                                      }}
+                                      className="col-span-2 px-1 py-1 bg-slate-50 dark:bg-slate-800 border rounded-lg text-xs text-center font-bold"
+                                    />
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      value={item.price}
+                                      onChange={(e) => {
+                                        const val = parseFloat(e.target.value) || 0;
+                                        updateItemsAndTotal(editItems.map((it, i) => i === idx ? { ...it, price: val } : it));
+                                      }}
+                                      className="col-span-2 px-1 py-1 bg-slate-50 dark:bg-slate-800 border rounded-lg text-xs text-center font-bold text-pink-600"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => updateItemsAndTotal(editItems.filter((_, i) => i !== idx))}
+                                      className="col-span-1 p-1 hover:bg-rose-100 text-rose-500 rounded-lg"
+                                    >
+                                      <Trash2 size={13} />
+                                    </button>
+                                  </div>
+                                ))}
+
+                                <button
+                                  type="button"
+                                  onClick={() => updateItemsAndTotal([
+                                    ...editItems,
+                                    { id: 'it_' + Date.now(), productNameEn: 'Custom Item', productNameBn: 'কাস্টম আইটেম', weight: '1 Pound', quantity: 1, price: 450, img: '' }
+                                  ])}
+                                  className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-[11px] font-bold flex items-center gap-1"
+                                >
+                                  <Plus size={12} />
+                                  Add Item
+                                </button>
+                              </div>
+
+                              {/* Final Total Price */}
+                              <div className="pt-2 border-t border-amber-200 dark:border-amber-800/60 flex flex-wrap items-center justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                  <label className="font-bold text-slate-800 dark:text-white">
+                                    Total (₹):
+                                  </label>
+                                  <input
+                                    type="number"
+                                    value={editTotal}
+                                    onChange={(e) => setEditTotal(parseFloat(e.target.value) || 0)}
+                                    className="w-24 px-2 py-1 bg-white dark:bg-slate-900 border-2 border-pink-500 rounded-xl text-sm font-black text-pink-600 focus:outline-none"
+                                  />
+                                </div>
+
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingOrderId(null)}
+                                    className="px-3 py-1.5 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold"
+                                  >
+                                    Cancel
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSaveEdit(order)}
+                                    className="px-4 py-1.5 rounded-xl bg-pink-600 hover:bg-pink-700 text-white font-bold"
+                                  >
+                                    Save
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            /* Standard Order Details */
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                              <div>
+                                <div className="text-slate-400 font-semibold mb-1 flex items-center gap-1">
+                                  <MapPin size={12} /> Address & Date:
+                                </div>
+                                <p className="text-slate-700 dark:text-slate-200 font-medium">
+                                  {order.deliveryAddress}
+                                </p>
+                                <p className="text-pink-600 dark:text-pink-400 font-bold mt-1">
+                                  Date: {order.deliveryDate} ({order.paymentMethod})
+                                </p>
+                              </div>
+
+                              <div className="bg-slate-50 dark:bg-slate-900/60 p-3 rounded-xl border border-slate-100 dark:border-slate-800 space-y-1.5">
+                                <div className="text-slate-400 font-semibold mb-1">Items:</div>
+                                {order.items.map((it, idx) => (
+                                  <div key={idx} className="flex items-center justify-between gap-2 text-slate-700 dark:text-slate-300 font-medium py-1 border-b border-slate-100 dark:border-slate-800/60 last:border-b-0">
+                                    <div className="flex items-center gap-2 overflow-hidden">
+                                      <OptimizedImage
+                                        src={it.img || 'https://i.ibb.co/Xx2kxrrg/LOGO-1.png'}
+                                        alt={it.productNameEn || 'Cake Item'}
+                                        width={80}
+                                        quality={70}
+                                        containerClassName="w-8 h-8 rounded-lg shrink-0 border border-slate-200 dark:border-slate-700"
+                                        className="w-full h-full object-cover"
+                                      />
+                                      <span className="truncate">• {it.productNameEn} ({it.weight}) x{it.quantity}</span>
+                                    </div>
+                                    <span className="font-bold text-pink-600 dark:text-pink-400 shrink-0">₹{(it.price || 450) * it.quantity}</span>
+                                  </div>
+                                ))}
+                                <div className="pt-2 border-t border-slate-200 dark:border-slate-700 flex justify-between font-bold text-sm text-slate-900 dark:text-white mt-1">
+                                  <span>Total:</span>
+                                  <span className="text-pink-600 dark:text-pink-400">₹{order.total}</span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* TAB 1: DRIVE */}
             {activeTab === 'drive' && (
@@ -840,34 +1529,131 @@ export default function WorkspaceModal({ isOpen, onClose }: WorkspaceModalProps)
               <div className="space-y-4">
                 <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3">
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex-1 min-w-[240px] space-y-1">
-                      <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 block uppercase">
-                        Target Google Spreadsheet ID
-                      </label>
+                    <div className="flex-1 min-w-[280px] space-y-1">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[11px] font-bold text-slate-600 dark:text-slate-400 block uppercase tracking-wider">
+                          Target Google Spreadsheet ID or URL
+                        </label>
+                        {sheetDetails?.spreadsheetUrl && (
+                          <a
+                            href={sheetDetails.spreadsheetUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold hover:underline flex items-center gap-1"
+                          >
+                            <ExternalLink size={12} /> Open in Google Sheets
+                          </a>
+                        )}
+                      </div>
                       <div className="flex gap-2">
                         <input
                           type="text"
+                          placeholder="Paste Spreadsheet ID or full Google Sheet URL..."
                           value={spreadsheetId}
                           onChange={(e) => setSpreadsheetId(e.target.value)}
-                          className="flex-1 px-3 py-1.5 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-mono"
+                          onBlur={() => {
+                            const parsed = parseSpreadsheetInput(spreadsheetId);
+                            if (parsed.spreadsheetId && parsed.spreadsheetId !== spreadsheetId && !/^[0-9]+$/.test(spreadsheetId.trim())) {
+                              setSpreadsheetId(parsed.spreadsheetId);
+                            }
+                          }}
+                          className="flex-1 px-3 py-2 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-mono focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
                         />
-                        <button onClick={fetchSheetData} disabled={!token || loadingSheet} className="px-3 py-1.5 bg-emerald-600 text-white rounded-xl text-xs font-bold">
-                          Load
+                        <button
+                          onClick={() => fetchSheetData(undefined, spreadsheetId)}
+                          disabled={!token || loadingSheet}
+                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-md disabled:opacity-50 flex items-center gap-1.5 shrink-0"
+                        >
+                          <RefreshCw size={14} className={loadingSheet ? 'animate-spin' : ''} />
+                          Load Sheet
                         </button>
                       </div>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-2">
-                      <button onClick={handleCreateNewOrdersSheet} disabled={!token || isCreatingSheet} className="px-3 py-2 bg-emerald-600 text-white text-xs font-bold rounded-xl flex items-center gap-1.5">
+                    <div className="flex flex-wrap items-center gap-2 pt-2 sm:pt-0">
+                      <button
+                        onClick={handleCreateNewOrdersSheet}
+                        disabled={!token || isCreatingSheet}
+                        className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-md disabled:opacity-50"
+                      >
                         <FolderPlus size={14} />
-                        {isCreatingSheet ? 'Creating...' : 'New Sheet'}
+                        {isCreatingSheet ? 'Creating...' : 'New Orders Sheet'}
                       </button>
-                      <button onClick={promptSyncAppOrdersToSheet} disabled={!token || orders.length === 0} className="px-3 py-2 bg-amber-500 text-slate-900 text-xs font-bold rounded-xl flex items-center gap-1.5">
+                      <button
+                        onClick={promptSyncAppOrdersToSheet}
+                        disabled={!token || orders.length === 0}
+                        className="px-3.5 py-2 bg-amber-500 hover:bg-amber-600 text-slate-900 text-xs font-bold rounded-xl flex items-center gap-1.5 shadow-md disabled:opacity-50"
+                      >
                         <Plus size={14} />
-                        Sync ({orders.length}) Orders
+                        Sync ({orders.length}) Orders to '{selectedSheetTitle}'
                       </button>
                     </div>
                   </div>
+
+                  {/* Subsheets (Tabs) Selection Bar */}
+                  {sheetDetails && sheetDetails.sheets && sheetDetails.sheets.length > 0 && (
+                    <div className="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                          <Sheet size={14} className="text-emerald-500" />
+                          Subsheet Tabs ({sheetDetails.sheets.length}):
+                        </span>
+                        <button
+                          onClick={() => setShowAddSubsheet(!showAddSubsheet)}
+                          className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1"
+                        >
+                          <Plus size={12} /> Add Subsheet Tab
+                        </button>
+                      </div>
+
+                      {showAddSubsheet && (
+                        <form onSubmit={handleAddSubsheet} className="flex gap-2 py-1">
+                          <input
+                            type="text"
+                            placeholder="Subsheet title (e.g. Orders, Analytics, Sales)..."
+                            value={newSubsheetTitle}
+                            onChange={(e) => setNewSubsheetTitle(e.target.value)}
+                            className="flex-1 px-3 py-1.5 bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-xs"
+                          />
+                          <button
+                            type="submit"
+                            disabled={!newSubsheetTitle.trim() || loadingSheet}
+                            className="px-3 py-1.5 bg-emerald-600 text-white font-bold text-xs rounded-xl"
+                          >
+                            Create
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setShowAddSubsheet(false)}
+                            className="px-3 py-1.5 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs rounded-xl"
+                          >
+                            Cancel
+                          </button>
+                        </form>
+                      )}
+
+                      <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+                        {sheetDetails.sheets.map((s) => {
+                          const isActive = selectedSheetTitle.toLowerCase() === s.title.toLowerCase();
+                          return (
+                            <button
+                              key={s.sheetId}
+                              onClick={() => handleSelectSubsheet(s.title)}
+                              className={`px-3.5 py-1.5 text-xs font-bold rounded-xl transition-all shrink-0 flex items-center gap-1.5 border ${
+                                isActive
+                                  ? 'bg-emerald-600 border-emerald-600 text-white shadow-md'
+                                  : 'bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:border-emerald-500/50'
+                              }`}
+                            >
+                              <Sheet size={13} className={isActive ? 'text-white' : 'text-slate-400'} />
+                              <span>{s.title}</span>
+                              {isActive && <CheckCircle2 size={12} className="text-white ml-0.5" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {!token ? (
@@ -878,10 +1664,16 @@ export default function WorkspaceModal({ isOpen, onClose }: WorkspaceModalProps)
                 ) : loadingSheet ? (
                   <div className="text-center py-12">
                     <RefreshCw size={24} className="animate-spin mx-auto text-emerald-500 mb-2" />
-                    <span className="text-xs text-slate-500">Loading Google Sheet data...</span>
+                    <span className="text-xs text-slate-500">Loading '{selectedSheetTitle}' Google Sheet data...</span>
                   </div>
                 ) : (
                   <div className="overflow-x-auto border border-slate-200 dark:border-slate-800 rounded-2xl">
+                    <div className="p-3 bg-slate-100/80 dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between text-xs font-bold">
+                      <span className="text-slate-700 dark:text-slate-300 flex items-center gap-2">
+                        <Sheet size={14} className="text-emerald-500" />
+                        Viewing Subsheet: <span className="text-emerald-600 dark:text-emerald-400 font-mono">{selectedSheetTitle}</span> ({sheetRows.length > 0 ? sheetRows.length - 1 : 0} rows)
+                      </span>
+                    </div>
                     <table className="w-full text-left border-collapse text-xs">
                       <thead>
                         <tr className="bg-slate-100 dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 font-bold uppercase">
@@ -900,7 +1692,7 @@ export default function WorkspaceModal({ isOpen, onClose }: WorkspaceModalProps)
                               <td key={colIdx} className="p-3 border-r border-slate-200 dark:border-slate-800 max-w-[180px] truncate">{String(cell)}</td>
                             ))}
                             <td className="p-3">
-                              <button onClick={() => promptUpdateRowStatus(rowIdx + 1, String(row[10] || 'Pending'))} className="px-2.5 py-1 bg-slate-200 dark:bg-slate-800 rounded-lg text-[10px] font-bold">
+                              <button onClick={() => promptUpdateRowStatus(rowIdx + 1, String(row[10] || 'Pending'))} className="px-2.5 py-1 bg-slate-200 dark:bg-slate-800 hover:bg-emerald-600 hover:text-white rounded-lg text-[10px] font-bold transition-all">
                                 Toggle Status
                               </button>
                             </td>
@@ -1221,6 +2013,7 @@ export default function WorkspaceModal({ isOpen, onClose }: WorkspaceModalProps)
           </div>
         )}
       </div>
-    </AnimatePresence>
-  );
+    )}
+  </AnimatePresence>
+);
 }

@@ -1,4 +1,61 @@
 import { Order } from '../types';
+import { DEFAULT_GOOGLE_APPS_SCRIPT_URL } from './googleSheetsSync';
+
+/**
+ * Utility function to send branded status update email via Google Apps Script Web App endpoint.
+ * Triggers an email from 'bakenflake.com' (display name "Bake n' Flake (bakenflake.com)")
+ * to the customer using the owner's Gmail address as sender.
+ */
+export async function sendEmailViaAppsScript(
+  order: Order,
+  newStatus: string
+): Promise<boolean> {
+  const customerEmail = order.customerEmail;
+  if (!customerEmail || !customerEmail.includes('@')) {
+    console.warn('[Apps Script Email] Valid customer email required for order:', order.id);
+    return false;
+  }
+
+  const payload = {
+    action: 'send_status_email',
+    sheetName: 'order info',
+    sheetGid: '1527393898',
+    senderDisplayName: "Bake n' Flake (bakenflake.com)",
+    fromEmail: "subhobratamondal@gmail.com",
+    from: "subhobratamondal@gmail.com",
+    toEmail: customerEmail,
+    to: customerEmail,
+    customerName: order.customerName,
+    orderId: order.id,
+    newStatus: newStatus,
+    status: newStatus,
+    items: order.items.map(item => ({
+      productName: item.productNameEn,
+      quantity: item.quantity,
+      price: item.price
+    })),
+    subtotal: order.subtotal || order.total,
+    total: order.total,
+    deliveryDate: order.deliveryDate || 'As scheduled',
+    deliveryAddress: order.deliveryAddress,
+    notes: order.notes || '',
+    subject: `🍰 Bake n' Flake (bakenflake.com) Order #${order.id.slice(-6).toUpperCase()} Status Update: ${newStatus}`
+  };
+
+  try {
+    const targetScriptUrl = `${DEFAULT_GOOGLE_APPS_SCRIPT_URL}?action=send_status_email&sheetName=${encodeURIComponent('order info')}&sheetGid=1527393898`;
+    const response = await fetch(targetScriptUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    console.log('[Apps Script Email] Status update email trigger completed:', response.status);
+    return true;
+  } catch (err: any) {
+    console.warn('[Apps Script Email] Webhook trigger notice:', err?.message || err);
+    return false;
+  }
+}
 
 /**
  * Encodes a string to RFC 4648 base64url format required by Gmail API.

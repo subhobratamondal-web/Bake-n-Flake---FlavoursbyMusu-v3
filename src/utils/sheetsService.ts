@@ -11,6 +11,42 @@ export interface SpreadsheetInfo {
 }
 
 /**
+ * Add a new subsheet (tab) to an existing Google Spreadsheet
+ */
+export async function addSheetTabToSpreadsheet(
+  accessToken: string,
+  spreadsheetId: string,
+  tabTitle: string
+): Promise<any> {
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      requests: [
+        {
+          addSheet: {
+            properties: {
+              title: tabTitle,
+            },
+          },
+        },
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Failed to create subsheet (${response.status}): ${errText}`);
+  }
+
+  return await response.json();
+}
+
+/**
  * Get spreadsheet details and sheets list
  */
 export async function getSpreadsheetDetails(
@@ -79,7 +115,7 @@ export async function appendSheetRows(
   range: string,
   rows: (string | number)[][]
 ): Promise<any> {
-  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED`;
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
   const response = await fetch(url, {
     method: 'POST',
     headers: {

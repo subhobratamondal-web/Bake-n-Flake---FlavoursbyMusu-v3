@@ -2,6 +2,12 @@
 export const FULL_GALLERY_BACKUP = {
   "items": [
     {
+      "nameEn": "Chocolate Cakes",
+      "nameBn": "চকলেট কেক",
+      "section": "Signature Menu",
+      "img": "https://i.ibb.co/S4MNP7Vf/Chocolate-Cakes.png"
+    },
+    {
       "nameEn": "Butterscotch Cakes",
       "nameBn": "বাটারস্কচ কেক",
       "section": "Signature Menu",

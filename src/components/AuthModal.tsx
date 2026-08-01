@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, User, Phone, Mail, MapPin, CheckCircle, ShieldCheck, LogOut, Sparkles } from 'lucide-react';
+import { X, User, Phone, Mail, MapPin, CheckCircle, ShieldCheck, LogOut, Crown, ShoppingBag, Sparkles } from 'lucide-react';
 import { UserProfile } from '../types';
-import { googleSignIn } from '../lib/workspaceAuth';
+import { googleSignIn, workspaceSignIn } from '../lib/workspaceAuth';
 import { sendCustomerLoginToGoogleSheet } from '../utils/googleSheetsSync';
 import { playSound } from '../lib/sounds';
 
@@ -24,15 +24,17 @@ export default function AuthModal({ isOpen, onClose, user, onLogin, onLogout, la
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  if (!isOpen) return null;
+  // if (!isOpen) return null; // Removed to let AnimatePresence handle it
 
-  const handleGoogleSignIn = async () => {
+  const handleCustomerGoogleSignIn = async () => {
     setIsGoogleLoading(true);
     setErrorMsg('');
     playSound('ding');
-
     try {
-      const res = await googleSignIn();
+      // If the email field already has an admin email, use workspaceSignIn to get all scopes at once
+      const isAdminEmail = email.trim().toLowerCase() === 'subhobratamondal@gmail.com' || email.trim().toLowerCase() === 'khanmegha99@gmail.com';
+      
+      const res = isAdminEmail ? await workspaceSignIn() : await googleSignIn();
       if (res && res.user) {
         const gName = res.user.displayName || name || 'Valued Customer';
         const gEmail = res.user.email || email;
@@ -42,11 +44,19 @@ export default function AuthModal({ isOpen, onClose, user, onLogin, onLogout, la
         setName(gName);
         setEmail(gEmail);
 
+        // Secret Admin Check
+        const isAdminUser = 
+          (gEmail && gEmail.toLowerCase() === 'subhobratamondal@gmail.com') || 
+          (gEmail && gEmail.toLowerCase() === 'khanmegha99@gmail.com') || 
+          (gPhone && gPhone === '9875563329') || 
+          (gPhone && gPhone === '8584017701');
+
         const profileData = {
           name: gName,
           phone: gPhone,
           email: gEmail,
-          address: gAddress
+          address: gAddress,
+          role: (isAdminUser ? 'admin' : 'customer') as 'admin' | 'customer'
         };
 
         onLogin(profileData);
@@ -76,11 +86,21 @@ export default function AuthModal({ isOpen, onClose, user, onLogin, onLogout, la
       return;
     }
 
+    const trimmedEmail = email.trim().toLowerCase();
+    const trimmedPhone = phone.trim();
+
+    const isAdminUser = 
+      trimmedEmail === 'subhobratamondal@gmail.com' || 
+      trimmedEmail === 'khanmegha99@gmail.com' || 
+      trimmedPhone === '9875563329' || 
+      trimmedPhone === '8584017701';
+
     const profileData = {
       name: name.trim(),
-      phone: phone.trim(),
+      phone: trimmedPhone,
       email: email.trim(),
-      address: address.trim() || 'Kamalgazi, Kolkata'
+      address: address.trim() || 'Kamalgazi, Kolkata',
+      role: (isAdminUser ? 'admin' : 'customer') as 'admin' | 'customer'
     };
 
     onLogin(profileData);
@@ -88,7 +108,6 @@ export default function AuthModal({ isOpen, onClose, user, onLogin, onLogout, la
       ...profileData,
       loginMethod: 'Manual Form Registration'
     });
-
     setSubmitted(true);
     setTimeout(() => {
       setSubmitted(false);
@@ -98,13 +117,14 @@ export default function AuthModal({ isOpen, onClose, user, onLogin, onLogout, la
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.95, y: 20 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 20 }}
-          className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-white/10 overflow-hidden"
-        >
+      {isOpen && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-white/10 overflow-hidden"
+          >
           {/* Header Banner */}
           <div className="bg-gradient-to-r from-pink-500 via-rose-500 to-amber-500 p-6 text-white relative">
             <button 
@@ -121,7 +141,7 @@ export default function AuthModal({ isOpen, onClose, user, onLogin, onLogout, la
                 <h3 className="text-xl font-bold">
                   {user?.isLoggedIn 
                     ? (lang === 'en' ? 'My Account' : 'আমার অ্যাকাউন্ট') 
-                    : (lang === 'en' ? 'Customer Login / Sign Up' : 'কাস্টমার লগইন / সাইন আপ')}
+                    : (lang === 'en' ? 'Customer Sign In / Sign Up' : 'কাস্টমার লগইন / সাইন আপ')}
                 </h3>
                 <p className="text-xs text-white/80">
                   {lang === 'en' ? 'Bake n\' Flake ~ Flavours by Musu' : 'বেক অ্যান্ড ফ্লেক ~ ফ্লেভার্স বাই মুসু'}
@@ -136,7 +156,7 @@ export default function AuthModal({ isOpen, onClose, user, onLogin, onLogout, la
               <div className="p-4 bg-pink-50 dark:bg-pink-950/30 rounded-2xl border border-pink-100 dark:border-pink-900/40">
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 flex items-center gap-1">
-                    <ShieldCheck size={12} /> {lang === 'en' ? 'Logged In' : 'লগইন করা আছে'}
+                    <ShieldCheck size={12} /> {user.role === 'admin' ? (lang === 'en' ? 'Owner Logged In' : 'মালিকের অ্যাকাউন্ট') : (lang === 'en' ? 'Customer Logged In' : 'লগইন করা আছে')}
                   </span>
                   <button
                     onClick={onLogout}
@@ -179,7 +199,7 @@ export default function AuthModal({ isOpen, onClose, user, onLogin, onLogout, la
               </div>
             </div>
           ) : (
-            /* Login Form */
+            /* Customer Login Form */
             <div className="p-6 space-y-4">
               {submitted ? (
                 <div className="py-8 text-center space-y-2">
@@ -193,7 +213,7 @@ export default function AuthModal({ isOpen, onClose, user, onLogin, onLogout, la
                   {/* Google Login Button */}
                   <button
                     type="button"
-                    onClick={handleGoogleSignIn}
+                    onClick={handleCustomerGoogleSignIn}
                     disabled={isGoogleLoading}
                     className="w-full py-3 px-4 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-800 dark:text-white font-extrabold text-sm rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex items-center justify-center gap-3 transition-all hover:shadow-md active:scale-95"
                   >
@@ -307,7 +327,9 @@ export default function AuthModal({ isOpen, onClose, user, onLogin, onLogout, la
           )}
         </motion.div>
       </div>
-    </AnimatePresence>
-  );
+    )}
+  </AnimatePresence>
+);
 }
+
 

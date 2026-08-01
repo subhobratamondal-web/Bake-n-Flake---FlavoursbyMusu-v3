@@ -44,7 +44,7 @@ export default function CartDrawer({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderPlacedSuccess, setOrderPlacedSuccess] = useState<Order | null>(null);
 
-  if (!isOpen) return null;
+  // if (!isOpen) return null;
 
   const subtotal = cart.reduce((sum, item) => sum + (item.price || 450) * item.quantity, 0);
 
@@ -97,14 +97,15 @@ export default function CartDrawer({
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[130] flex justify-end bg-black/60 backdrop-blur-sm">
-        <motion.div 
-          initial={{ x: '100%' }}
-          animate={{ x: 0 }}
-          exit={{ x: '100%' }}
-          transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-          className="relative w-full max-w-md bg-white dark:bg-slate-900 h-full shadow-2xl flex flex-col border-l border-slate-200 dark:border-white/10"
-        >
+      {isOpen && (
+        <div className="fixed inset-0 z-[130] flex justify-end bg-black/60 backdrop-blur-sm">
+          <motion.div 
+            initial={{ x: '100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '100%' }}
+            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+            className="relative w-full max-w-md bg-white dark:bg-slate-900 h-full shadow-2xl flex flex-col border-l border-slate-200 dark:border-white/10"
+          >
           {/* Top Header */}
           <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-pink-50/50 dark:bg-pink-950/20">
             <div className="flex items-center gap-3">
@@ -372,6 +373,7 @@ export default function CartDrawer({
           )}
         </motion.div>
       </div>
-    </AnimatePresence>
-  );
+    )}
+  </AnimatePresence>
+);
 }

@@ -94,6 +94,9 @@
 }
 
 @layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
   html {
     @apply m-0 p-0;
     scroll-behavior: smooth;
@@ -103,6 +106,7 @@
     min-height: 100vh;
     -webkit-overflow-scrolling: touch;
     text-rendering: optimizeLegibility;
+    touch-action: manipulation;
   }
 }
 

@@ -23,11 +23,11 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
   className = '',
   containerClassName = '',
   skeletonClassName = '',
-  rootMargin = '200px',
+  rootMargin = '400px',
   style,
   ...props
 }) => {
-  const [isInView, setIsInView] = useState(false);
+  const [isInView, setIsInView] = useState(true);
   const [isLoaded, setIsLoaded] = useState(false);
   const [currentSrc, setCurrentSrc] = useState<string>(() => {
     if (!src) return fallbackSrc;
@@ -52,21 +52,36 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
         { rootMargin }
       );
       observer.observe(containerRef.current);
-      return () => observer.disconnect();
+
+      // Fallback timer for iOS Safari / scroll glitches
+      const timer = setTimeout(() => setIsInView(true), 500);
+
+      return () => {
+        observer.disconnect();
+        clearTimeout(timer);
+      };
     } else {
       setIsInView(true);
     }
   }, [rootMargin]);
 
   useEffect(() => {
-    if (isInView && src) {
+    if (src) {
       const optimized = getOptimizedImageUrl(src, width, quality) || src || fallbackSrc;
       setCurrentSrc(optimized);
       setHasError(false);
-    } else if (!src) {
+    } else {
       setCurrentSrc(fallbackSrc);
     }
-  }, [isInView, src, width, quality, fallbackSrc]);
+  }, [src, width, quality, fallbackSrc]);
+
+  // Safety fallback for image load state so images never stay hidden/invisible
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsLoaded(true);
+    }, 1200);
+    return () => clearTimeout(timer);
+  }, [currentSrc]);
 
   const handleError = () => {
     if (!hasError) {
@@ -104,12 +119,13 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
           alt={alt}
           loading={isGif ? "eager" : "lazy"}
           decoding="async"
+          crossOrigin="anonymous"
           onLoad={() => setIsLoaded(true)}
           onError={handleError}
           referrerPolicy="no-referrer"
           className={cn(
-            "transition-opacity duration-300",
-            isLoaded || isGif ? "opacity-100" : "opacity-0",
+            "transition-all duration-500 ease-in-out",
+            isLoaded || isGif ? "opacity-100 scale-100 blur-0" : "opacity-0 scale-105 blur-md",
             className
           )}
           style={style}

@@ -83,3 +83,31 @@ export async function listCalendarEvents(
   const data = await response.json();
   return data.items || [];
 }
+
+/**
+ * Helper to push new user order deadlines as Google Calendar events so they automatically
+ * appear in Google Calendar and the 'Upcoming Celebrations' view alongside existing reminders.
+ */
+export async function pushOrderDeadlineCalendarEvent(
+  accessToken: string,
+  order: {
+    id: string;
+    customerName: string;
+    customerPhone: string;
+    deliveryDate: string;
+    items: { productNameEn: string; quantity: number }[];
+    total: number;
+    deliveryAddress: string;
+  }
+): Promise<any> {
+  const summary = `🎂 Order Delivery Deadline: #${order.id.slice(-6).toUpperCase()} (${order.customerName})`;
+  const description = `Bake n' Flake Order Deadline for ${order.customerName}.\nPhone: ${order.customerPhone}\nItems: ${order.items.map(i => `${i.productNameEn} x${i.quantity}`).join(', ')}\nTotal: ₹${order.total}\nDelivery Address: ${order.deliveryAddress || 'Store Pickup'}`;
+
+  return await createCalendarEvent(accessToken, {
+    summary,
+    description,
+    startIsoDate: order.deliveryDate || new Date().toISOString().slice(0, 10),
+    location: order.deliveryAddress || "Bake n' Flake Store"
+  });
+}
+

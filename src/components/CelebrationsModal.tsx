@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Calendar, Plus, Trash2, Gift, Heart, Sparkles, Cake, Bell, ChevronRight, Check, ListTodo, ExternalLink } from 'lucide-react';
+import { X, Calendar, Plus, Trash2, Gift, Heart, Sparkles, Cake, Bell, ChevronRight, Check, CheckCircle2, ListTodo, ExternalLink } from 'lucide-react';
 import { playSound } from '../lib/sounds';
 import { createCalendarEvent } from '../utils/calendarService';
 import { createGoogleTask } from '../utils/tasksService';
-import { getAccessToken, googleSignIn } from '../lib/workspaceAuth';
+import { getAccessToken, workspaceSignIn } from '../lib/workspaceAuth';
 
 export interface CelebrationEvent {
   id: string;
@@ -58,14 +58,20 @@ export default function CelebrationsModal({ isOpen, onClose, lang, onOrderForCel
   const [isGoogleSigningIn, setIsGoogleSigningIn] = useState(false);
   const [gcalMsg, setGcalMsg] = useState('');
   const [taskSyncingId, setTaskSyncingId] = useState<string | null>(null);
+  const [toast, setToast] = useState<{message: string, visible: boolean}>({message: "", visible: false});
+  const [googleTasks, setGoogleTasks] = useState<any[]>([]);
+  const [googleHolidays, setGoogleHolidays] = useState<any[]>([]);
+  const [isFetchingGoogleData, setIsFetchingGoogleData] = useState(false);
+
 
   const handleGoogleModalSignIn = async () => {
     setIsGoogleSigningIn(true);
     playSound('ding');
     try {
-      const res = await googleSignIn();
+      const res = await workspaceSignIn();
       if (res && res.accessToken) {
         setGcalMsg(lang === 'en' ? 'Google Account connected! Google Calendar & Tasks sync is ready.' : 'গুগল অ্যাকাউন্ট কানেক্ট হয়েছে! ক্যালেন্ডার ও টাস্ক সিঙ্ক প্রস্তুত।');
+        fetchGoogleData();
       }
     } catch (e: any) {
       setGcalMsg(lang === 'en' ? 'Google Sign-In notice: You can still save reminders locally.' : 'গুগল সাইন-ইন না হলেও লোকালি তথ্য সেভ থাকবে।');
@@ -81,7 +87,54 @@ export default function CelebrationsModal({ isOpen, onClose, lang, onOrderForCel
     }
   }, [isOpen]);
 
-  if (!isOpen) return null;
+  const fetchGoogleData = async () => {
+    const token = getAccessToken();
+    if (!token) return;
+    setIsFetchingGoogleData(true);
+    try {
+      // Fetch Indian Holidays from Google Calendar
+      const calRes = await fetch('https://www.googleapis.com/calendar/v3/calendars/en.indian%23holiday%40group.v.calendar.google.com/events?timeMin=' + new Date().toISOString() + '&maxResults=10&orderBy=startTime&singleEvents=true', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (calRes.ok) {
+        const calData = await calRes.json();
+        setGoogleHolidays(calData.items || []);
+      }
+
+      // Fetch Task Lists
+      const tlRes = await fetch('https://tasks.googleapis.com/tasks/v1/users/@me/lists', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (tlRes.ok) {
+        const tlData = await tlRes.json();
+        const lists = tlData.items || [];
+        let allTasks = [];
+        for (const list of lists.slice(0, 2)) {
+           const tRes = await fetch(`https://tasks.googleapis.com/tasks/v1/lists/${list.id}/tasks?showCompleted=false&maxResults=5`, {
+             headers: { Authorization: `Bearer ${token}` }
+           });
+           if (tRes.ok) {
+             const tData = await tRes.json();
+             allTasks = [...allTasks, ...(tData.items || [])];
+           }
+        }
+        setGoogleTasks(allTasks);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsFetchingGoogleData(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchGoogleData();
+    }
+  }, [isOpen]);
+
+
+  // if (!isOpen) return null;
 
   // Sync National Holidays & Festival Pre-Orders Feed
   const handleSyncNationalHolidays = async () => {
@@ -166,7 +219,7 @@ export default function CelebrationsModal({ isOpen, onClose, lang, onOrderForCel
     setTimeout(() => setGcalMsg(''), 4000);
   };
 
-  const handleAddCelebration = (e: React.FormEvent) => {
+  const handleAddCelebration = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!personName.trim() || !date) return;
 
@@ -184,6 +237,23 @@ export default function CelebrationsModal({ isOpen, onClose, lang, onOrderForCel
     saveStoredCelebrations(updated);
     playSound('ding');
 
+    // Sync directly to Google Calendar API if logged in
+    const token = getAccessToken();
+    if (token) {
+      try {
+        await createCalendarEvent(token, {
+          summary: `🎂 ${newEvent.personName}'s ${newEvent.type.toUpperCase()} - Bake n' Flake`,
+          description: `Celebration reminder for ${newEvent.personName} (${newEvent.relationship}). ${newEvent.notes ? `Note: ${newEvent.notes}` : 'Order special cake from Bake n Flake!'}`,
+          startIsoDate: newEvent.date,
+          location: "Bake n' Flake Bakery Counter"
+        });
+        setGcalMsg(lang === 'en' ? `Synced "${newEvent.personName}" to Google Calendar!` : `গুগল ক্যালেন্ডারে "${newEvent.personName}" যোগ করা হয়েছে!`);
+        setTimeout(() => setGcalMsg(''), 4000);
+      } catch (err) {
+        console.warn('Google Calendar push error:', err);
+      }
+    }
+
     // Reset Form
     setPersonName('');
     setDate('');
@@ -198,14 +268,16 @@ export default function CelebrationsModal({ isOpen, onClose, lang, onOrderForCel
   };
 
   return (
+    <>
     <AnimatePresence>
-      <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95, y: 20 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 20 }}
-          className="relative w-full max-w-xl bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-pink-100 dark:border-slate-800 overflow-hidden flex flex-col max-h-[85vh]"
-        >
+      {isOpen && (
+        <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            className="relative w-full max-w-xl bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-pink-100 dark:border-slate-800 overflow-hidden flex flex-col max-h-[85vh]"
+          >
           {/* Header */}
           <div className="px-6 py-5 bg-gradient-to-r from-pink-500 via-rose-500 to-amber-500 text-white flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -547,9 +619,149 @@ export default function CelebrationsModal({ isOpen, onClose, lang, onOrderForCel
                 })}
               </div>
             )}
+            
+            {/* Google Holidays & Tasks View */}
+            {(googleHolidays.length > 0 || googleTasks.length > 0) && (
+              <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3 flex items-center gap-1.5">
+                  <svg className="w-4 h-4" viewBox="0 0 24 24">
+                      <path fill="#4285F4" d="M19 3h-1V1h-2v2H8V1H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H5V8h14v11z"/>
+                      <path fill="#34A853" d="M7 10h5v5H7z"/>
+                  </svg>
+                  {lang === 'en' ? 'Live Google Workspace Sync' : 'গুগল ওয়ার্কস্পেস সিঙ্ক'}
+                </h4>
+                
+                {googleHolidays.length > 0 && (
+                  <div className="mb-4">
+                    <h5 className="text-[11px] font-bold text-blue-600 dark:text-blue-400 mb-2 uppercase">Upcoming Indian Holidays</h5>
+                    <div className="space-y-2">
+                      {googleHolidays.map((holiday, idx) => (
+                        <div key={idx} className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-900/50 flex justify-between items-center">
+                           <div className="flex items-center gap-2">
+                             <Calendar size={14} className="text-blue-500 shrink-0" />
+                             <div>
+                               <p className="text-xs font-bold text-slate-800 dark:text-slate-200">{holiday.summary}</p>
+                               <p className="text-[10px] font-medium text-slate-500">{new Date(holiday.start?.date || holiday.start?.dateTime).toLocaleDateString()}</p>
+                             </div>
+                           </div>
+                           <div className="flex items-center gap-1">
+                             <button 
+                               onClick={() => {
+                                 const newEvent = {
+                                   id: holiday.id || 'h_' + Math.random(),
+                                   personName: holiday.summary,
+                                   relationship: 'Holiday',
+                                   date: (holiday.start?.date || holiday.start?.dateTime || '').split('T')[0],
+                                   type: 'other',
+                                   notes: 'Imported from Google Calendar',
+                                   isGoogleCalendar: true
+                                 };
+                                 const updated = [...celebrations, newEvent];
+                                 setCelebrations(updated);
+                                 saveStoredCelebrations(updated);
+                                 setToast({ message: 'Saved to Dates!', visible: true });
+                                 setTimeout(() => setToast({ message: '', visible: false }), 2000);
+                               }}
+                               className="px-2 py-1 bg-white/50 dark:bg-slate-800 rounded shadow-sm text-[10px] font-bold hover:bg-blue-100 dark:hover:bg-blue-900 transition-colors"
+                             >
+                               Save
+                             </button>
+                             {onOrderForCelebration && (
+                               <button 
+                                 onClick={() => {
+                                   onOrderForCelebration({
+                                     id: holiday.id, personName: holiday.summary, relationship: 'Holiday', date: (holiday.start?.date || holiday.start?.dateTime || '').split('T')[0], type: 'other', notes: 'Google Holiday'
+                                   });
+                                   onClose();
+                                 }}
+                                 className="px-2 py-1 bg-pink-500 text-white rounded shadow-sm text-[10px] font-bold hover:bg-pink-600 transition-colors"
+                               >
+                                 Order
+                               </button>
+                             )}
+                           </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {googleTasks.length > 0 && (
+                  <div>
+                    <h5 className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 mb-2 uppercase">Your Google Tasks</h5>
+                    <div className="space-y-2">
+                      {googleTasks.map((task, idx) => (
+                        <div key={idx} className="p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl border border-emerald-100 dark:border-emerald-900/50 flex justify-between items-center">
+                           <div className="flex items-center gap-2">
+                             <ListTodo size={14} className="text-emerald-500 shrink-0" />
+                             <div>
+                               <p className="text-xs font-bold text-slate-800 dark:text-slate-200 line-clamp-1">{task.title}</p>
+                               {task.due && <p className="text-[10px] font-medium text-slate-500">Due: {new Date(task.due).toLocaleDateString()}</p>}
+                             </div>
+                           </div>
+                           <div className="flex items-center gap-1 shrink-0">
+                             <button 
+                               onClick={() => {
+                                 const newEvent = {
+                                   id: task.id || 't_' + Math.random(),
+                                   personName: task.title,
+                                   relationship: 'Task',
+                                   date: task.due ? task.due.split('T')[0] : new Date().toISOString().split('T')[0],
+                                   type: 'other',
+                                   notes: 'Imported from Google Tasks',
+                                   isGoogleCalendar: true
+                                 };
+                                 const updated = [...celebrations, newEvent];
+                                 setCelebrations(updated);
+                                 saveStoredCelebrations(updated);
+                                 setToast({ message: 'Saved to Dates!', visible: true });
+                                 setTimeout(() => setToast({ message: '', visible: false }), 2000);
+                               }}
+                               className="px-2 py-1 bg-white/50 dark:bg-slate-800 rounded shadow-sm text-[10px] font-bold hover:bg-emerald-100 dark:hover:bg-emerald-900 transition-colors"
+                             >
+                               Save
+                             </button>
+                             {onOrderForCelebration && (
+                               <button 
+                                 onClick={() => {
+                                   onOrderForCelebration({
+                                     id: task.id, personName: task.title, relationship: 'Task', date: task.due ? task.due.split('T')[0] : new Date().toISOString().split('T')[0], type: 'other', notes: 'Google Task'
+                                   });
+                                   onClose();
+                                 }}
+                                 className="px-2 py-1 bg-pink-500 text-white rounded shadow-sm text-[10px] font-bold hover:bg-pink-600 transition-colors"
+                               >
+                                 Order
+                               </button>
+                             )}
+                           </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            
           </div>
         </motion.div>
       </div>
-    </AnimatePresence>
-  );
+    )}
+  </AnimatePresence>
+
+      <AnimatePresence>
+        {toast.visible && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.9 }}
+            className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-4 py-2 rounded-xl text-sm font-bold z-[100] shadow-xl flex items-center gap-2"
+          >
+            <CheckCircle2 size={16} className="text-emerald-400" />
+            {toast.message}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </>
+);
 }

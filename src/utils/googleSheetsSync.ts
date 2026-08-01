@@ -132,7 +132,8 @@ export async function fetchGalleryDataDirectFromSheets(): Promise<GalleryData | 
       'YouTube Video': [],
       'Facebook Video': [],
       'Story Section': [],
-      'Hero Section': []
+      'Hero Section': [],
+      'Reviews': []
     };
 
     // 1. Fetch main structured sheets in parallel
@@ -252,6 +253,42 @@ export async function fetchGalleryDataDirectFromSheets(): Promise<GalleryData | 
       result['Hero Section'] = heroImages;
     }
 
+    // Parse Reviews Section (WEB REVIEWS or Reviews)
+    const webReviewRows = await fetchSheetRows('WEB REVIEWS');
+    const reviewRows = (webReviewRows && webReviewRows.length > 1) ? webReviewRows : await fetchSheetRows('Reviews');
+    if (reviewRows && reviewRows.length > 1) {
+      const parsedReviews = reviewRows.slice(1).map((row) => {
+        // Col A (0): Timestamp, Col B (1): Name, Col C (2): Rating, Col D (3): Text En, Col E (4): Text Bn
+        // Col F (5): Verified, Col G (6): Source/Email, Col H (7): Owner Reply En, Col I (8): Reply Date, Col J (9): Images
+        const dateStr = row[0] || '';
+        const nameEn = row[1] || row[0] || 'Anonymous';
+        const nameBn = row[1] || nameEn;
+        const rating = parseFloat(row[2]) || 5;
+        const textEn = row[3] || '';
+        const textBn = row[4] || textEn;
+        const verifiedStr = row[5] || 'VERIFIED';
+        const source = (row[6] || 'web').toLowerCase();
+        const ownerReplyEn = row[7] || '';
+        const ownerReplyBn = row[8] || ownerReplyEn;
+        const imagesCell = row[9] || row[10] || '';
+        
+        const reviewImages = imagesCell ? imagesCell.split(',').map(s => convertImageUrl(s.trim())).filter(Boolean) : [];
+        
+        return {
+          nameEn, nameBn, rating, textEn, textBn,
+          date: new Date(dateStr || Date.now()),
+          timeEn: dateStr || 'Verified Customer',
+          timeBn: dateStr || 'ভেরিফাইড কাস্টমার',
+          avatar: 'https://i.ibb.co/XkYN11bL/PROFILE.jpg',
+          ownerReplyEn, ownerReplyBn, reviewImages,
+          source: (source.includes('google') ? 'google' : source.includes('fb') || source.includes('facebook') ? 'facebook' : 'web') as 'google' | 'facebook' | 'web',
+          recommends: true,
+          verified: verifiedStr
+        };
+      }).filter(r => r.nameEn && (r.textEn || r.textBn));
+      result['Reviews'] = parsedReviews;
+    }
+
     // 2. Fetch category sub-sheets in parallel batches
     const BATCH_SIZE = 5;
     for (let i = 0; i < CATEGORY_SHEET_NAMES.length; i += BATCH_SIZE) {
@@ -274,6 +311,23 @@ export async function fetchGalleryDataDirectFromSheets(): Promise<GalleryData | 
           });
           if (catImages.length > 0) {
             result[sheetName] = catImages;
+            
+            // Auto-restore missing menu items if they exist as category tabs but were removed from Menu Database
+            if (result.items && !result.items.find(it => it.nameEn.toLowerCase() === sheetName.toLowerCase())) {
+              let section = 'Signature Menu';
+              if (sheetName.toLowerCase().includes('gift') || sheetName.toLowerCase().includes('day') || sheetName.toLowerCase().includes('anniversary') || sheetName.toLowerCase().includes('birthday')) {
+                section = 'Thoughtful Gifting';
+              } else if (sheetName.toLowerCase().includes('theme') || sheetName.toLowerCase().includes('photo') || sheetName.toLowerCase().includes('combo') || sheetName.toLowerCase().includes('pizza')) {
+                section = 'Explore More';
+              }
+              
+              result.items.push({
+                nameEn: sheetName,
+                nameBn: sheetName,
+                section: section,
+                img: catImages[0]
+              });
+            }
           }
         }
       });
@@ -282,6 +336,15 @@ export async function fetchGalleryDataDirectFromSheets(): Promise<GalleryData | 
       if (i + BATCH_SIZE < CATEGORY_SHEET_NAMES.length) {
         await new Promise(r => setTimeout(r, 100));
       }
+    }
+
+    if (result.items && !result.items.some(it => it.nameEn && it.nameEn.toLowerCase() === 'chocolate cakes')) {
+      result.items.unshift({
+        nameEn: "Chocolate Cakes",
+        nameBn: "চকলেট কেক",
+        section: "Signature Menu",
+        img: "https://i.ibb.co/S4MNP7Vf/Chocolate-Cakes.png"
+      });
     }
 
     return result;
@@ -293,7 +356,11 @@ export async function fetchGalleryDataDirectFromSheets(): Promise<GalleryData | 
 
 export const BAKERY_WHATSAPP_NUMBER = '919875563329';
 export const TARGET_GOOGLE_SHEET_ID = '1vZsYmZzxu653U4T6O-_S0i2dazAU_VJKBRYwdgAmXSw';
-export const DEFAULT_GOOGLE_APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwooZcsYkCYbzPORtVsU40Mmi8pxT2tFTItb9WKqns7Mk-0WFsx4k_t1kc3tQ7nDN_yjA/exec';
+export const DEFAULT_GOOGLE_APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxgCQLsDAJI1oLzWRzIb-Ascy_QiYiTSBAl-XF8bcvE0wd5nAg-WP0TJbsiuff5EW2ygg/exec';
+
+import { getAccessToken } from '../lib/workspaceAuth';
+import { getSheetValues, updateSheetRange, appendSheetRows } from './sheetsService';
+import { uploadImageFileToDrive, makeFilePublic } from './driveService';
 
 export async function sendOrderToGoogleSheet(order: any, isUpdate: boolean = false): Promise<boolean> {
   try {
@@ -313,34 +380,92 @@ export async function sendOrderToGoogleSheet(order: any, isUpdate: boolean = fal
       itemsString = JSON.stringify(order.items || '');
     }
 
+    const orderIdVal = order.id || '#BNF-' + Math.floor(1000 + Math.random() * 9000);
+    const rowValues = [
+      order.timestamp || new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
+      orderIdVal,
+      order.customerName || order.name || 'Valued Customer',
+      order.customerPhone || order.phone || '',
+      order.customerEmail || '',
+      itemsString,
+      order.subtotal || order.total || 0,
+      order.total || order.price || 0,
+      order.deliveryAddress || order.address || 'Kolkata',
+      order.deliveryDate || '',
+      order.status || 'Pending',
+      order.paymentMethod || 'Cash on Delivery',
+      order.notes || order.message || order.requirements || ''
+    ];
+
+    // Primary Attempt: If browser has OAuth token, use Google Sheets API directly with deduplication
+    const token = getAccessToken();
+    if (token) {
+      try {
+        const fetched = await getSheetValues(token, TARGET_GOOGLE_SHEET_ID, "'Order info'!A1:M300");
+        const rows = fetched.values || [];
+        
+        let existingRowIndex = -1;
+        const normOrderId = orderIdVal.trim().toLowerCase();
+
+        for (let i = 0; i < rows.length; i++) {
+          const row = rows[i];
+          const cellB = row[1] ? String(row[1]).trim().toLowerCase() : '';
+          if (cellB === normOrderId) {
+            existingRowIndex = i + 1; // 1-indexed for Google Sheets
+            break;
+          }
+        }
+
+        if (existingRowIndex > 0) {
+          // Update existing row in place
+          await updateSheetRange(token, TARGET_GOOGLE_SHEET_ID, `'Order info'!A${existingRowIndex}:M${existingRowIndex}`, [rowValues]);
+          console.log(`[Google Sheets API] Updated existing order row ${existingRowIndex} for ${orderIdVal}`);
+          return true;
+        } else {
+          // Append as new single row
+          await appendSheetRows(token, TARGET_GOOGLE_SHEET_ID, "'Order info'!A:M", [rowValues]);
+          console.log(`[Google Sheets API] Appended new order row for ${orderIdVal}`);
+          return true;
+        }
+      } catch (directErr) {
+        console.warn('Direct OAuth Sheets API call notice, using proxy fallback:', directErr);
+      }
+    }
+
     const payload = {
-      orderId: order.id || '#BNF-' + Math.floor(1000 + Math.random() * 9000),
-      timestamp: order.timestamp || new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }),
-      customerName: order.customerName || order.name || 'Valued Customer',
-      customerPhone: order.customerPhone || order.phone || '',
-      customerEmail: order.customerEmail || '',
+      orderId: orderIdVal,
+      timestamp: rowValues[0],
+      customerName: rowValues[2],
+      customerPhone: rowValues[3],
+      customerEmail: rowValues[4],
       items: itemsString,
-      subtotal: order.subtotal || order.total || 0,
-      total: order.total || order.price || 0,
-      deliveryAddress: order.deliveryAddress || order.address || 'Kolkata',
-      deliveryDate: order.deliveryDate || '',
-      status: order.status || 'Pending',
-      paymentMethod: order.paymentMethod || 'Cash on Delivery',
-      notes: order.notes || order.message || order.requirements || '',
+      subtotal: rowValues[6],
+      total: rowValues[7],
+      deliveryAddress: rowValues[8],
+      deliveryDate: rowValues[9],
+      status: rowValues[10],
+      paymentMethod: rowValues[11],
+      notes: rowValues[12],
       sheetName: 'order info',
       sheetGid: '1527393898',
       isUpdate: isUpdate
     };
 
-    // 1. Backend server proxy sync
-    fetch('/api/sync-sheet', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    }).catch(err => console.warn('Backend proxy sync notice:', err));
+    // Secondary: Send POST to backend server proxy API
+    try {
+      const res = await fetch('/api/sync-sheet', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) return true;
+    } catch (err) {
+      console.warn('Backend proxy sync notice, trying direct webhook fallback:', err);
+    }
 
-    // 2. Direct Apps Script webhook call
-    fetch(DEFAULT_GOOGLE_APPS_SCRIPT_URL, {
+    // Tertiary Fallback: Direct Apps Script webhook call if backend proxy fails
+    const directScriptUrl = `${DEFAULT_GOOGLE_APPS_SCRIPT_URL}?sheetName=${encodeURIComponent('order info')}&sheetGid=1527393898&gid=1527393898&sheet=${encodeURIComponent('order info')}&tab=${encodeURIComponent('order info')}`;
+    await fetch(directScriptUrl, {
       method: 'POST',
       mode: 'no-cors',
       headers: { 'Content-Type': 'application/json' },
@@ -458,19 +583,27 @@ export async function sendCustomerLoginToGoogleSheet(profile: {
       total: 0,
       status: 'User Registered',
       paymentMethod: 'N/A',
-      sheetName: 'Customer Log',
-      sheetGid: '0'
+      sheetName: 'User login',
+      sheetGid: '2141183941',
+      gid: '2141183941',
+      tabName: 'User login'
     };
 
-    // 1. Send via Backend Server API Proxy
-    fetch('/api/sync-sheet', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    }).catch(err => console.warn('Customer login server sync notice:', err));
+    // Primary: Send single POST request to backend server proxy API
+    try {
+      const res = await fetch('/api/sync-sheet', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) return true;
+    } catch (err) {
+      console.warn('Login proxy sync notice, trying direct webhook fallback:', err);
+    }
 
-    // 2. Direct Google Apps Script Webhook
-    fetch(DEFAULT_GOOGLE_APPS_SCRIPT_URL, {
+    // Fallback: Direct Google Apps Script Webhook
+    const loginScriptUrl = `${DEFAULT_GOOGLE_APPS_SCRIPT_URL}?sheetName=${encodeURIComponent('User login')}&sheetGid=2141183941&gid=2141183941&sheet=${encodeURIComponent('User login')}&tab=${encodeURIComponent('User login')}&action=user_login`;
+    await fetch(loginScriptUrl, {
       method: 'POST',
       mode: 'no-cors',
       headers: { 'Content-Type': 'application/json' },
@@ -480,6 +613,141 @@ export async function sendCustomerLoginToGoogleSheet(profile: {
     return true;
   } catch (err) {
     console.error('Customer login sheet recording error:', err);
+    return false;
+  }
+}
+
+export async function sendCustomerLogoutToGoogleSheet(profile?: {
+  name?: string;
+  phone?: string;
+  email?: string;
+} | null) {
+  try {
+    const timestampStr = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+    const payload = {
+      orderId: 'LOGOUT-' + Math.floor(100000 + Math.random() * 900000),
+      timestamp: timestampStr,
+      customerName: profile?.name || 'User',
+      customerPhone: profile?.phone || '',
+      customerEmail: profile?.email || '',
+      deliveryAddress: 'Kolkata',
+      notes: `User Logged Out`,
+      items: `CUSTOMER LOGOUT LOG`,
+      subtotal: 0,
+      total: 0,
+      status: 'User Logged Out',
+      paymentMethod: 'N/A',
+      sheetName: 'User login',
+      sheetGid: '2141183941',
+      gid: '2141183941',
+      tabName: 'User login'
+    };
+
+    try {
+      const res = await fetch('/api/sync-sheet', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) return true;
+    } catch (err) {
+      console.warn('Logout proxy sync notice, trying direct webhook fallback:', err);
+    }
+
+    const logoutScriptUrl = `${DEFAULT_GOOGLE_APPS_SCRIPT_URL}?sheetName=${encodeURIComponent('User login')}&sheetGid=2141183941&gid=2141183941&sheet=${encodeURIComponent('User login')}&tab=${encodeURIComponent('User login')}&action=user_logout`;
+    await fetch(logoutScriptUrl, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    }).catch(err => console.warn('Logout webhook notice:', err));
+
+    return true;
+  } catch (err) {
+    console.error('Logout sheet recording error:', err);
+    return false;
+  }
+}
+
+export async function submitReviewToGoogleSheet(review: {
+  name: string;
+  rating: number;
+  text: string;
+  source: 'web' | 'google' | 'facebook';
+  photoUrls?: string[];
+  files?: File[];
+}) {
+  try {
+    const timestamp = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+    let finalPhotoUrls = review.photoUrls || [];
+
+    const token = getAccessToken();
+    
+    // Upload files to Drive if token is available
+    if (token && review.files && review.files.length > 0) {
+      try {
+        const uploadPromises = review.files.map(file => 
+          uploadImageFileToDrive(token, file, `review_${Date.now()}_${file.name}`)
+        );
+        const uploadedFiles = await Promise.all(uploadPromises);
+        
+        // Make each file public
+        for (const file of uploadedFiles) {
+          if (file.id) {
+            await makeFilePublic(token, file.id).catch(e => console.warn('Could not make file public:', e));
+          }
+        }
+
+        const driveUrls = uploadedFiles.map(f => f.webViewLink).filter(Boolean) as string[];
+        finalPhotoUrls = [...finalPhotoUrls, ...driveUrls];
+      } catch (err) {
+        console.warn('Failed to upload some images to Drive:', err);
+      }
+    }
+
+    const rowValues = [
+      review.name,
+      review.name, // nameBn
+      review.rating.toString(),
+      review.text,
+      review.text, // textBn
+      timestamp,
+      '', // avatar
+      '', // ownerReplyEn
+      '', // ownerReplyBn
+      review.source,
+      finalPhotoUrls.join(', ')
+    ];
+
+    if (token) {
+      try {
+        await appendSheetRows(token, TARGET_GOOGLE_SHEET_ID, "'Reviews'!A:K", [rowValues]);
+        return true;
+      } catch (err) {
+        console.warn('OAuth submit review failed, using fallback:', err);
+      }
+    }
+
+    const payload = {
+      ...review,
+      photoUrls: finalPhotoUrls,
+      timestamp,
+      verified: 'VERIFIED',
+      sheetName: 'WEB REVIEWS',
+      sheetGid: '96927725',
+      gid: '96927725',
+      action: 'submit_review'
+    };
+
+    const res = await fetch('/api/sync-sheet', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    return res.ok;
+  } catch (err) {
+    console.error('Review submission error:', err);
     return false;
   }
 }

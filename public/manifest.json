@@ -1,0 +1,24 @@
+{
+  "short_name": "Bake n Flake",
+  "name": "Bake n' Flake ~ Flavours by Musu",
+  "description": "Artisan Handcrafted Bakery, Custom Cakes & Gourmet Desserts in Kolkata",
+  "icons": [
+    {
+      "src": "https://i.ibb.co/Xx2kxrrg/LOGO-1.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://i.ibb.co/Xx2kxrrg/LOGO-1.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#080808",
+  "theme_color": "#ec4899",
+  "display": "standalone",
+  "orientation": "portrait"
+}

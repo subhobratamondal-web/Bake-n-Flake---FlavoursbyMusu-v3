@@ -123,6 +123,37 @@ export async function uploadImageFileToDrive(
 }
 
 /**
+ * Make a file publicly accessible (anyone with link can view)
+ */
+export async function makeFilePublic(
+  accessToken: string,
+  fileId: string
+): Promise<boolean> {
+  const response = await fetch(
+    `https://www.googleapis.com/drive/v3/files/${fileId}/permissions`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        role: 'reader',
+        type: 'anyone',
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    const errText = await response.text();
+    console.warn(`Failed to make file public (${response.status}): ${errText}`);
+    return false;
+  }
+
+  return true;
+}
+
+/**
  * Delete a file from Google Drive
  * IMPORTANT: User MUST confirm this action before calling this function!
  */

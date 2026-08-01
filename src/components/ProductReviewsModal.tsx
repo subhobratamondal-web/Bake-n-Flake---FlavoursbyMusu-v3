@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Star, MessageSquare, CheckCircle2, User, ThumbsUp, Heart } from 'lucide-react';
+import { X, Star, MessageSquare, CheckCircle2, User, ThumbsUp, Heart, Camera } from 'lucide-react';
 import { Product } from '../types';
+import { AppContext } from '../App';
 
 interface ProductReviewsModalProps {
   isOpen: boolean;
@@ -16,6 +17,7 @@ interface ReviewItem {
   rating: number;
   date: string;
   comment: string;
+  photoUrl?: string;
   verified: boolean;
 }
 
@@ -1070,19 +1072,58 @@ function getReviewsForProduct(productName: string = '', category: string = ''): 
 }
 
 export default function ProductReviewsModal({ isOpen, onClose, product, lang }: ProductReviewsModalProps) {
+  const { orders } = useContext(AppContext);
   const [reviewsList, setReviewsList] = useState<ReviewItem[]>([]);
   const [newRating, setNewRating] = useState(5);
   const [userName, setUserName] = useState('');
   const [userComment, setUserComment] = useState('');
+  const [reviewPhoto, setReviewPhoto] = useState<string | null>(null);
   const [submitted, setSubmitted] = useState(false);
 
   useEffect(() => {
     if (product) {
-      setReviewsList(getReviewsForProduct(product.nameEn, product.category || ''));
+      const defaultReviews = getReviewsForProduct(product.nameEn, product.category || '');
+      
+      // Extract live reviews submitted via Order History & Live Tracking for this product
+      const pNameLower = product.nameEn.toLowerCase().trim();
+      const liveOrderReviews: ReviewItem[] = [];
+
+      (orders || []).forEach(ord => {
+        if (ord.userReview) {
+          const matchesProduct = ord.items.some(it => 
+            it.productNameEn.toLowerCase().trim().includes(pNameLower) ||
+            pNameLower.includes(it.productNameEn.toLowerCase().trim())
+          );
+          if (matchesProduct) {
+            liveOrderReviews.push({
+              id: 'ord_rev_' + ord.id,
+              userName: `${ord.customerName} (Verified Customer 🌟)`,
+              rating: ord.userReview.rating,
+              date: ord.userReview.timestamp ? new Date(ord.userReview.timestamp).toLocaleDateString() : 'Recent Order',
+              comment: ord.userReview.comment,
+              photoUrl: ord.userReview.photoUrl,
+              verified: true
+            });
+          }
+        }
+      });
+
+      setReviewsList([...liveOrderReviews, ...defaultReviews]);
     }
-  }, [product]);
+  }, [product, orders]);
 
   if (!isOpen || !product) return null;
+
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setReviewPhoto(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const handleSubmitReview = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1094,6 +1135,7 @@ export default function ProductReviewsModal({ isOpen, onClose, product, lang }: 
       rating: newRating,
       date: 'Just now',
       comment: userComment.trim(),
+      photoUrl: reviewPhoto || undefined,
       verified: true
     };
 
@@ -1101,6 +1143,19 @@ export default function ProductReviewsModal({ isOpen, onClose, product, lang }: 
     setSubmitted(true);
     setUserName('');
     setUserComment('');
+    setReviewPhoto(null);
+
+    // Sync product review to Google Sheets
+    import('../utils/googleSheetsSync').then(({ submitReviewToGoogleSheet }) => {
+      submitReviewToGoogleSheet({
+        name: userName.trim(),
+        rating: newRating,
+        text: `[PRODUCT REVIEW for ${product.nameEn}] ${userComment.trim()}`,
+        source: 'web',
+        photoUrls: reviewPhoto ? [reviewPhoto] : []
+      }).catch(err => console.warn('Review sync notice:', err));
+    });
+
     setTimeout(() => setSubmitted(false), 4000);
   };
 
@@ -1241,6 +1296,39 @@ export default function ProductReviewsModal({ isOpen, onClose, product, lang }: 
                 className="w-full p-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs dark:text-white"
               />
 
+              {/* Camera Photo Upload */}
+              <div>
+                <div className="flex items-center gap-2">
+                  <label className="cursor-pointer py-1.5 px-3 rounded-xl bg-pink-50 hover:bg-pink-100 text-pink-600 dark:bg-pink-950/60 dark:text-pink-300 text-xs font-semibold flex items-center gap-1.5 border border-pink-200 dark:border-pink-800 transition-colors">
+                    <Camera size={14} />
+                    <span>{lang === 'en' ? 'Attach Cake Photo (Camera)' : 'কেকের ছবি যুক্ত করুন'}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={handlePhotoUpload}
+                      className="hidden"
+                    />
+                  </label>
+                  {reviewPhoto && (
+                    <div className="relative group">
+                      <img
+                        src={reviewPhoto}
+                        alt="Preview"
+                        className="w-9 h-9 object-cover rounded-lg border border-pink-300"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setReviewPhoto(null)}
+                        className="absolute -top-1 -right-1 bg-rose-500 text-white rounded-full p-0.5 text-[10px]"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               <button
                 type="submit"
                 className="w-full py-2.5 rounded-xl bg-pink-500 hover:bg-pink-600 text-white font-bold text-xs shadow-md transition-all"
@@ -1283,6 +1371,16 @@ export default function ProductReviewsModal({ isOpen, onClose, product, lang }: 
                   <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed italic">
                     "{rev.comment}"
                   </p>
+                  {rev.photoUrl && (
+                    <div className="pt-1">
+                      <img
+                        src={rev.photoUrl}
+                        alt="Cake review attachment"
+                        className="w-20 h-20 object-cover rounded-xl border border-pink-200 shadow-sm"
+                        referrerPolicy="no-referrer"
+                      />
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Clock, Check, MessageCircle, AlertCircle, Heart, Star, CheckCircle2, MessageSquare, ChefHat, Truck, Sparkles, PackageCheck, ClipboardCheck, Trash2 } from 'lucide-react';
+import { X, Clock, Check, MessageCircle, AlertCircle, Heart, Star, CheckCircle2, MessageSquare, ChefHat, Truck, Sparkles, PackageCheck, ClipboardCheck, Trash2, Camera, Image as ImageIcon } from 'lucide-react';
 import { Order, OrderStatus } from '../types';
 import { BAKERY_WHATSAPP_NUMBER, generateWhatsAppCustomerThanksLink } from '../utils/googleSheetsSync';
+import OptimizedImage from './OptimizedImage';
 
 interface OrderHistoryModalProps {
   isOpen: boolean;
   onClose: () => void;
   orders: Order[];
-  onAddReview?: (orderId: string, rating: number, comment: string) => void;
+  onAddReview?: (orderId: string, rating: number, comment: string, photoUrl?: string) => void;
   onRemoveOldOrders?: () => void;
   onRemoveOrder?: (orderId: string) => void;
   lang: 'en' | 'bn';
@@ -134,9 +135,10 @@ export default function OrderHistoryModal({ isOpen, onClose, orders, onAddReview
   const [activeReviewOrderId, setActiveReviewOrderId] = useState<string | null>(null);
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState('');
+  const [reviewPhoto, setReviewPhoto] = useState<string | null>(null);
   const [submittedOrders, setSubmittedOrders] = useState<Record<string, boolean>>({});
 
-  if (!isOpen) return null;
+  // if (!isOpen) return null;
 
   const hasOrdersOlderThan30Days = orders.some(o => {
     const ageInMs = Date.now() - new Date(o.timestamp).getTime();
@@ -162,25 +164,38 @@ export default function OrderHistoryModal({ isOpen, onClose, orders, onAddReview
     return getStatusStepIndex(status);
   };
 
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setReviewPhoto(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleReviewSubmit = (orderId: string, e: React.FormEvent) => {
     e.preventDefault();
     if (onAddReview && comment.trim()) {
-      onAddReview(orderId, rating, comment.trim());
+      onAddReview(orderId, rating, comment.trim(), reviewPhoto || undefined);
       setSubmittedOrders(prev => ({ ...prev, [orderId]: true }));
       setActiveReviewOrderId(null);
       setComment('');
+      setReviewPhoto(null);
     }
   };
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.95, y: 20 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 20 }}
-          className="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-white/10 overflow-hidden max-h-[85vh] flex flex-col"
-        >
+      {isOpen && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            className="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-white/10 overflow-hidden max-h-[85vh] flex flex-col"
+          >
           {/* Header */}
           <div className="bg-gradient-to-r from-pink-500 via-rose-500 to-amber-500 p-6 text-white flex items-center justify-between shrink-0">
             <div className="flex items-center gap-3">
@@ -288,16 +303,31 @@ export default function OrderHistoryModal({ isOpen, onClose, orders, onAddReview
                     <OrderProgressBar status={order.status} lang={lang} />
 
                     {/* Items List */}
-                    <div className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-100 dark:border-slate-800 text-xs space-y-1.5">
+                    <div className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-100 dark:border-slate-800 text-xs space-y-2">
                       <div className="font-bold text-slate-700 dark:text-slate-300 mb-1">
                         {lang === 'en' ? 'Ordered Items:' : 'অর্ডার করা আইটেম:'}
                       </div>
                       {order.items.map((item, idx) => (
-                        <div key={idx} className="flex justify-between text-slate-600 dark:text-slate-400">
-                          <span>
-                            • {item.productNameEn} ({item.weight}) x{item.quantity}
-                          </span>
-                          <span className="font-semibold">₹{(item.price || 450) * item.quantity}</span>
+                        <div key={idx} className="flex items-center justify-between gap-2 text-slate-600 dark:text-slate-400 py-1 border-b border-slate-50 dark:border-slate-800/60 last:border-b-0">
+                          <div className="flex items-center gap-2.5 overflow-hidden">
+                            <OptimizedImage
+                              src={item.img || 'https://i.ibb.co/Xx2kxrrg/LOGO-1.png'}
+                              alt={item.productNameEn || 'Cake Item'}
+                              width={80}
+                              quality={70}
+                              containerClassName="w-10 h-10 rounded-lg shrink-0 border border-slate-200 dark:border-slate-700 shadow-xs"
+                              className="w-full h-full object-cover"
+                            />
+                            <div className="truncate">
+                              <p className="font-semibold text-slate-800 dark:text-slate-200 truncate">
+                                {lang === 'en' ? item.productNameEn : (item.productNameBn || item.productNameEn)}
+                              </p>
+                              <p className="text-[10px] text-slate-400">
+                                {item.weight} x {item.quantity}
+                              </p>
+                            </div>
+                          </div>
+                          <span className="font-bold text-pink-600 dark:text-pink-400 shrink-0">₹{(item.price || 450) * item.quantity}</span>
                         </div>
                       ))}
                       <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex justify-between font-bold text-slate-800 dark:text-white">
@@ -340,13 +370,23 @@ export default function OrderHistoryModal({ isOpen, onClose, orders, onAddReview
 
                         {/* Submitted Review Info */}
                         {order.userReview && (
-                          <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-emerald-100 dark:border-emerald-800/40 text-xs">
+                          <div className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-emerald-100 dark:border-emerald-800/40 text-xs space-y-2">
                             <div className="font-bold text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
                               {'⭐'.repeat(order.userReview.rating)} {order.userReview.rating}/5
                             </div>
-                            <p className="text-slate-600 dark:text-slate-300 italic mt-0.5">
+                            <p className="text-slate-600 dark:text-slate-300 italic">
                               "{order.userReview.comment}"
                             </p>
+                            {order.userReview.photoUrl && (
+                              <div className="mt-2">
+                                <img
+                                  src={order.userReview.photoUrl}
+                                  alt="Cake photo"
+                                  className="w-24 h-24 object-cover rounded-xl border border-emerald-200 shadow-sm"
+                                  referrerPolicy="no-referrer"
+                                />
+                              </div>
+                            )}
                           </div>
                         )}
 
@@ -386,7 +426,43 @@ export default function OrderHistoryModal({ isOpen, onClose, orders, onAddReview
                               className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-pink-500 dark:text-white"
                             />
 
-                            <div className="flex justify-end gap-2">
+                            {/* Camera / Photo Upload input */}
+                            <div>
+                              <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1">
+                                {lang === 'en' ? '📷 Upload Cake Photo (Camera / Gallery)' : '📷 কেকের ছবি তুলুন বা আপলোড করুন'}
+                              </label>
+                              <div className="flex items-center gap-2">
+                                <label className="cursor-pointer py-1.5 px-3 rounded-xl bg-pink-50 hover:bg-pink-100 text-pink-600 dark:bg-pink-950/60 dark:text-pink-300 text-xs font-semibold flex items-center gap-1.5 border border-pink-200 dark:border-pink-800 transition-colors">
+                                  <Camera size={14} />
+                                  <span>{lang === 'en' ? 'Snap/Choose Photo' : 'ছবি বেছে নিন'}</span>
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    capture="environment"
+                                    onChange={handlePhotoUpload}
+                                    className="hidden"
+                                  />
+                                </label>
+                                {reviewPhoto && (
+                                  <div className="relative group">
+                                    <img
+                                      src={reviewPhoto}
+                                      alt="Preview"
+                                      className="w-10 h-10 object-cover rounded-lg border border-pink-300"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => setReviewPhoto(null)}
+                                      className="absolute -top-1 -right-1 bg-rose-500 text-white rounded-full p-0.5 text-[10px]"
+                                    >
+                                      ✕
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="flex justify-end gap-2 pt-1">
                               <button
                                 type="button"
                                 onClick={() => setActiveReviewOrderId(null)}
@@ -412,6 +488,7 @@ export default function OrderHistoryModal({ isOpen, onClose, orders, onAddReview
           </div>
         </motion.div>
       </div>
-    </AnimatePresence>
-  );
+    )}
+  </AnimatePresence>
+);
 }

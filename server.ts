@@ -4,6 +4,7 @@ import { createServer as createViteServer } from 'vite';
 import { google } from 'googleapis';
 import dotenv from 'dotenv';
 import { PassThrough } from 'stream';
+import axios from 'axios';
 import { FULL_GALLERY_BACKUP } from './src/constants/fullGalleryBackup.ts';
 
 dotenv.config();
@@ -79,15 +80,18 @@ app.get(['/api/gallery', '/gallery'], async (req, res) => {
 const recentProcessedOrders = new Map<string, number>();
 
 function isDuplicateOrder(orderId: string, status?: string, total?: any, isUpdate?: boolean): boolean {
-  if (!orderId || isUpdate) return false;
-  const key = `${orderId}_${status || 'Pending'}_${total || 0}`;
+  if (!orderId) return false;
+  // Normalize ID to match Apps Script (remove # and lowercase)
+  const normId = String(orderId || "").replace(/^#/, "").trim().toLowerCase();
+  const normStatus = (status || 'pending').trim().toLowerCase();
+  const key = `${normId}_${normStatus}`;
   const now = Date.now();
   for (const [k, time] of recentProcessedOrders.entries()) {
-    if (now - time > 3000) {
+    if (now - time > 15 * 60 * 1000) {
       recentProcessedOrders.delete(k);
     }
   }
-  if (recentProcessedOrders.has(key)) {
+  if (recentProcessedOrders.has(key) && !isUpdate) {
     return true;
   }
   recentProcessedOrders.set(key, now);
@@ -96,24 +100,45 @@ function isDuplicateOrder(orderId: string, status?: string, total?: any, isUpdat
 
 async function appendToGoogleSheetDirectly(payload: any) {
   const spreadsheetId = SPREADSHEET_ID;
-  const scriptUrl = 'https://script.google.com/macros/s/AKfycbx4b-WMJic6rFfgYkn8UZxfWcvWvzco2chSN72tqjiePMlD_zCJkMVOhjTD-t0yKJUIbA/exec';
+  const scriptUrl = 'https://script.google.com/macros/s/AKfycbxgCQLsDAJI1oLzWRzIb-Ascy_QiYiTSBAl-XF8bcvE0wd5nAg-WP0TJbsiuff5EW2ygg/exec';
 
   const orderId = payload.orderId || payload.id || "#BNF-" + Math.floor(1000 + Math.random() * 9000);
-  const rowValues = [
-    payload.timestamp || new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
-    orderId,
-    payload.customerName || payload.name || "Valued Customer",
-    payload.customerPhone || payload.phone || "",
-    payload.customerEmail || payload.email || "",
-    typeof payload.items === 'string' ? payload.items : JSON.stringify(payload.items || ''),
-    payload.subtotal || payload.total || 0,
-    payload.total || payload.price || 0,
-    payload.deliveryDate || "",
-    payload.deliveryAddress || payload.address || "Kolkata",
-    payload.status || "Pending",
-    payload.paymentMethod || "Cash on Delivery",
-    payload.notes || payload.message || payload.requirements || ""
-  ];
+  const requestedSheetName = payload.sheetName || 'order info';
+  const requestedSheetGid = String(payload.sheetGid || payload.gid || '1527393898');
+
+  let rowValues = [];
+  const isReviewSheet = requestedSheetName.toLowerCase().includes('review') || requestedSheetName.toLowerCase().includes('web reviews');
+  
+  if (isReviewSheet) {
+    rowValues = [
+      payload.timestamp || new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }), // Col A: Timestamp
+      payload.name || payload.nameEn || payload.customerName || "Anonymous", // Col B: Customer Name
+      payload.rating || 5, // Col C: Rating
+      payload.text || payload.textEn || "", // Col D: Review Text (En)
+      payload.textBn || payload.text || payload.textEn || "", // Col E: Review Text (Bn)
+      payload.verified || "VERIFIED", // Col F: Verified
+      payload.email || payload.source || 'web', // Col G: Source / Email
+      payload.ownerReplyEn || payload.ownerReply || "", // Col H: Owner Reply
+      payload.ownerReplyDate || payload.replyDate || "", // Col I: Reply Date
+      Array.isArray(payload.photoUrls) ? payload.photoUrls.join(', ') : (payload.photoUrls || "") // Col J: Images
+    ];
+  } else {
+    rowValues = [
+      payload.timestamp || new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
+      orderId,
+      payload.customerName || payload.name || "Valued Customer",
+      payload.customerPhone || payload.phone || "",
+      payload.customerEmail || payload.email || "",
+      typeof payload.items === 'string' ? payload.items : JSON.stringify(payload.items || ''),
+      payload.subtotal || payload.total || 0,
+      payload.total || payload.price || 0,
+      payload.deliveryDate || "",
+      payload.deliveryAddress || payload.address || "Kolkata",
+      payload.status || "Pending",
+      payload.paymentMethod || "Cash on Delivery",
+      payload.notes || payload.message || payload.requirements || ""
+    ];
+  }
 
   let directApiSuccess = false;
 
@@ -124,15 +149,15 @@ async function appendToGoogleSheetDirectly(payload: any) {
     });
     const sheetsClient = google.sheets({ version: 'v4', auth });
     
-    // Inspect spreadsheet metadata to find the exact sheet title for gid=1527393898 or title 'order info'
-    let targetSheetTitle = 'order info';
+    // Inspect spreadsheet metadata to find the exact sheet title for requested sheetGid or title (e.g. 'User login')
+    let targetSheetTitle = requestedSheetName;
     try {
       const meta = await sheetsClient.spreadsheets.get({ spreadsheetId });
       const sheetList = meta.data.sheets || [];
       const matched = sheetList.find((s: any) => 
-        String(s.properties?.sheetId) === '1527393898' ||
-        String(s.properties?.title || '').toLowerCase().includes('order info') ||
-        String(s.properties?.title || '').toLowerCase() === 'order info'
+        String(s.properties?.sheetId) === requestedSheetGid ||
+        String(s.properties?.title || '').toLowerCase().trim() === requestedSheetName.toLowerCase().trim() ||
+        String(s.properties?.title || '').toLowerCase().includes(requestedSheetName.toLowerCase().trim())
       );
       if (matched && matched.properties?.title) {
         targetSheetTitle = matched.properties.title;
@@ -143,6 +168,8 @@ async function appendToGoogleSheetDirectly(payload: any) {
 
     // Lookup existing order ID row in column B to update if present
     let existingRowIndex = -1;
+    const normalizedTargetId = String(orderId || "").replace(/^#/, "").trim().toLowerCase();
+    
     try {
       const readRes = await sheetsClient.spreadsheets.values.get({
         spreadsheetId,
@@ -150,17 +177,61 @@ async function appendToGoogleSheetDirectly(payload: any) {
       });
       const rows = readRes.data.values || [];
       for (let i = 0; i < rows.length; i++) {
-        if (rows[i] && String(rows[i][0]).trim() === String(orderId).trim()) {
-          existingRowIndex = i + 1; // 1-indexed for Google Sheets
-          break;
+        if (rows[i]) {
+          const cellVal = String(rows[i][0] || "").replace(/^#/, "").trim().toLowerCase();
+          if (cellVal === normalizedTargetId) {
+            existingRowIndex = i + 1; // 1-indexed for Google Sheets
+            break;
+          }
         }
       }
     } catch (readErr: any) {
       console.warn('[Google Sheets API] Row search notice:', readErr.message);
     }
 
-    if (existingRowIndex > 0) {
-      // UPDATE existing row
+    if (payload.action === 'owner_reply') {
+      try {
+        const replySheetTitle = targetSheetTitle || 'WEB REVIEWS';
+        const readRes = await sheetsClient.spreadsheets.values.get({
+          spreadsheetId,
+          range: `'${replySheetTitle}'!A:J`
+        });
+        const rows = readRes.data.values || [];
+        let matchIndex = -1;
+        const targetName = String(payload.reviewName || '').trim().toLowerCase();
+        const targetText = String(payload.reviewText || '').trim().toLowerCase();
+
+        for (let i = 0; i < rows.length; i++) {
+          if (rows[i]) {
+            const nameCol = String(rows[i][1] || rows[i][0] || '').trim().toLowerCase();
+            const textCol = String(rows[i][3] || rows[i][4] || '').trim().toLowerCase();
+            if ((targetName && nameCol === targetName) || (targetText && textCol && textCol.includes(targetText))) {
+              matchIndex = i + 1; // 1-indexed
+              break;
+            }
+          }
+        }
+        if (matchIndex > 0) {
+          const replyDate = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
+          await sheetsClient.spreadsheets.values.update({
+            spreadsheetId,
+            range: `'${replySheetTitle}'!H${matchIndex}:I${matchIndex}`,
+            valueInputOption: 'USER_ENTERED',
+            requestBody: {
+              values: [[payload.ownerReply || '', replyDate]]
+            }
+          });
+          console.log(`[Google Sheets API] Updated owner reply for review "${payload.reviewName}" at row ${matchIndex} in '${replySheetTitle}'`);
+          directApiSuccess = true;
+          return true;
+        }
+      } catch (replyErr: any) {
+        console.info('[Google Sheets Sync] Owner reply notice:', replyErr.message);
+      }
+    }
+
+    if (existingRowIndex > 0 && !isReviewSheet) {
+      // UPDATE existing order row
       const updateRange = `'${targetSheetTitle}'!A${existingRowIndex}:M${existingRowIndex}`;
       await sheetsClient.spreadsheets.values.update({
         spreadsheetId,
@@ -168,40 +239,89 @@ async function appendToGoogleSheetDirectly(payload: any) {
         valueInputOption: 'USER_ENTERED',
         requestBody: { values: [rowValues] }
       });
-      console.log(`[Google Sheets API] Updated existing row ${existingRowIndex} for order ${orderId}`);
+      console.log(`[Google Sheets API] Updated existing row ${existingRowIndex} in sheet '${targetSheetTitle}' for ${orderId}`);
     } else {
-      // APPEND new row
-      const appendRange = `'${targetSheetTitle}'!A:M`;
+      // APPEND new row (A:J for Reviews, A:M for Orders)
+      const appendRange = isReviewSheet ? `'${targetSheetTitle}'!A:J` : `'${targetSheetTitle}'!A:M`;
       await sheetsClient.spreadsheets.values.append({
         spreadsheetId,
         range: appendRange,
         valueInputOption: 'USER_ENTERED',
-        requestBody: { values: [rowValues] },
+        insertDataOption: 'INSERT_ROWS',
+        requestBody: {
+          majorDimension: 'ROWS',
+          values: [rowValues] 
+        },
       });
-      console.log(`[Google Sheets API] Successfully appended new order row ${orderId} to ${appendRange}`);
+      console.log(`[Google Sheets API] Successfully appended new row to sheet '${targetSheetTitle}'`);
     }
     directApiSuccess = true;
   } catch (err: any) {
     console.info('[Google Sheets Sync] Direct Sheets API notice:', err?.message || err);
   }
 
-  // Webhook Sync to Google Apps Script
+  if (directApiSuccess) {
+    return true; // Avoid duplicate logging by skipping Webhook if Direct API succeeded
+  }
+
+  // Webhook Sync to Google Apps Script as a robust fallback
   try {
-    const response = await fetch(scriptUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ...payload,
-        orderId,
-        sheetName: 'order info',
-        sheetGid: '1527393898'
-      }),
-      redirect: 'follow',
+    const queryParams = {
+      sheetName: requestedSheetName,
+      sheetGid: requestedSheetGid,
+      gid: requestedSheetGid,
+      sheet: requestedSheetName,
+      tabName: requestedSheetName,
+      tab: requestedSheetName,
+      action: requestedSheetName === 'User login' ? 'user_login' : 'order_sync'
+    };
+
+    const response = await axios.post(scriptUrl, {
+      ...payload,
+      orderId,
+      sheetName: requestedSheetName,
+      sheetGid: requestedSheetGid,
+      gid: requestedSheetGid,
+      tabName: requestedSheetName,
+      sheet: requestedSheetName,
+      tab: requestedSheetName
+    }, {
+      params: queryParams,
+      headers: { 
+        'Content-Type': 'application/json',
+        'User-Agent': 'Bake-n-Flake-Server/1.0'
+      },
+      timeout: 12000,
+      maxRedirects: 5
     });
-    const responseText = await response.text();
-    console.log('[Google Sheets Webhook] Apps Script sync completed:', responseText.slice(0, 100));
+
+    console.log(`[Google Sheets Webhook] Apps Script sync to '${requestedSheetName}' completed. Status: ${response.status}`);
   } catch (webhookErr: any) {
-    console.warn('[Google Sheets Webhook] Sync notice:', webhookErr?.message || webhookErr);
+    let errorMsg = webhookErr.response?.data || webhookErr.message || webhookErr;
+    if (typeof errorMsg === 'string' && errorMsg.includes('<html')) {
+       errorMsg = 'HTML Response (Apps Script URL invalid or unavailable)';
+    }
+    if (webhookErr.code === 'ECONNABORTED' || String(errorMsg).includes('timeout')) {
+      console.info(`[Google Sheets Webhook] Apps Script request submitted for '${requestedSheetName}' (asynchronous process continue in background)`);
+    } else {
+      console.warn('[Google Sheets Webhook] Sync notice:', errorMsg);
+    }
+    
+    // Final fallback: If axios fails, try one last native fetch but with more forgiving options
+    try {
+      const q = new URLSearchParams({
+        sheetName: requestedSheetName,
+        sheetGid: requestedSheetGid,
+        action: requestedSheetName === 'User login' ? 'user_login' : 'order_sync'
+      }).toString();
+      
+      await fetch(`${scriptUrl}?${q}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        priority: 'low'
+      }).catch(() => {});
+    } catch (e) {}
   }
 
   return true;
@@ -370,7 +490,7 @@ async function fetchWithRetry(url: string, signal: AbortSignal, maxRetries = 2):
 
 async function fetchPublicSheet(sheetName: string) {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 60000); // Increased to 60s
+  const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
   const startTime = Date.now();
   
   try {
@@ -620,6 +740,15 @@ function rebuildGallery() {
     });
   }
 
+  if (newGallery.items && !newGallery.items.some((it: any) => it.nameEn && it.nameEn.toLowerCase() === 'chocolate cakes')) {
+    newGallery.items.unshift({
+      nameEn: "Chocolate Cakes",
+      nameBn: "চকলেট কেক",
+      section: "Signature Menu",
+      img: "https://i.ibb.co/S4MNP7Vf/Chocolate-Cakes.png"
+    });
+  }
+
   // 3. Map all cached sheets to the gallery
   Object.keys(sheetCache).forEach(name => {
     if (menuSources.includes(name) || imgSheets.includes(name)) return;
@@ -787,8 +916,8 @@ async function startServer() {
     console.log(`Server running on http://localhost:${PORT}`);
     // Start syncing after server is up to avoid startup blocking
     runInitialSync().catch(err => console.error('Initial sync failed:', err));
-    // Background workers
-    setInterval(processQueue, 3000); // Check every 3s for updates
+    // Background workers - slower interval to reduce client re-renders and rate limits
+    setInterval(processQueue, 15000); // Check every 15s instead of 3s
   });
 }
 

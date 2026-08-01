@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
-import { Menu, X, Sun, Moon, Globe, ShoppingBag, BookOpen, Image as ImageIcon, Phone, Send, ShoppingCart, User as UserIcon, Clock, Shield, ChevronDown, Sparkles, Heart, HardDrive } from 'lucide-react';
+import { Menu, X, Sun, Moon, Globe, ShoppingBag, BookOpen, Image as ImageIcon, Phone, Send, ShoppingCart, User as UserIcon, Clock, Shield, ChevronDown, ChevronRight, Sparkles, Heart, HardDrive, Bell, LogOut } from 'lucide-react';
 import { AppContext } from '../App';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -9,8 +9,8 @@ export default function Navbar() {
   const { 
     lang, setLang, t, theme, toggleTheme, galleryData, setOrderModalOpen,
     cart, user, orders, isAdminLoggedIn, wishlist, setIsWishlistOpen,
-    setIsCartOpen, setIsAuthModalOpen, setIsOrderHistoryOpen, setIsOwnerPortalOpen,
-    setIsWorkspaceOpen
+    setIsCartOpen, setIsAuthModalOpen, setIsOrderHistoryOpen,
+    setIsWorkspaceOpen, requestNotifications, logoutUser
   } = useContext(AppContext);
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -38,22 +38,26 @@ export default function Navbar() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const scrollToSection = (id: string) => {
-    const element = document.getElementById(id);
-    if (element) {
-      const yOffset = -80;
-      const y = element.getBoundingClientRect().top + window.pageYOffset + yOffset;
-      window.scrollTo({ top: y, behavior: 'smooth' });
-    }
-    setMobileMenuOpen(false);
-  };
-
   const navItems = [
     { id: 'menu', icon: ShoppingBag },
     { id: 'story', icon: BookOpen },
     { id: 'gallery', icon: ImageIcon },
-    { id: 'contact', icon: Phone }
+    { id: 'contact', icon: Phone },
   ];
+
+  const scrollToSection = (id: string) => {
+    const element = document.getElementById(id);
+    if (element) {
+      const offset = 80;
+      const elementPosition = element.getBoundingClientRect().top;
+      const offsetPosition = elementPosition + window.pageYOffset - offset;
+      window.scrollTo({
+        top: offsetPosition,
+        behavior: 'smooth'
+      });
+    }
+    setMobileMenuOpen(false);
+  };
 
   return (
     <nav className={cn(
@@ -62,12 +66,27 @@ export default function Navbar() {
     )}>
       <div className="w-full">
         <div className={cn(
-          "flex justify-between items-center h-20 px-3 md:px-8 transition-all duration-500",
+          "flex items-center h-20 px-3 md:px-8 transition-all duration-500 relative",
           scrolled ? "glass-3d shadow-2xl shadow-pink-500/10 rounded-none border-x-0 w-full" : "max-w-7xl mx-auto px-4 md:px-12 bg-transparent"
         )}>
-          {/* Brand Logo */}
+          {/* Mobile: Sidebar Trigger (Left) */}
+          <div className="flex lg:hidden z-[115]">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setMobileMenuOpen(!mobileMenuOpen);
+              }}
+              className="p-2 rounded-xl bg-slate-100/90 dark:bg-slate-800/90 text-slate-800 dark:text-white active:scale-95 transition-all shadow-sm border border-slate-200/80 dark:border-slate-700/80 touch-manipulation cursor-pointer select-none min-w-[38px] min-h-[38px] flex items-center justify-center shrink-0"
+              style={{ touchAction: 'manipulation' }}
+            >
+              {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+            </button>
+          </div>
+
+          {/* Brand Logo (Desktop: Left, Mobile: Center) */}
           <div 
-            className="flex items-center gap-2.5 cursor-pointer group shrink-0"
+            className="flex items-center gap-2.5 cursor-pointer group shrink-0 lg:static absolute left-1/2 -translate-x-1/2 lg:translate-x-0"
             onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
           >
             <div className="w-10 h-10 md:w-12 md:h-12 bg-white rounded-full flex items-center justify-center overflow-hidden border-2 border-pink-200 shadow-md transform transition-transform group-hover:scale-110 group-hover:rotate-6">
@@ -84,8 +103,7 @@ export default function Navbar() {
           </div>
 
           {/* Desktop Navbar Actions */}
-          <div className="hidden lg:flex items-center gap-4">
-            {/* Section Nav links */}
+          <div className="hidden lg:flex items-center gap-4 flex-1 justify-end">
             <div className="flex items-center gap-1">
               {navItems.map((item) => (
                 <button
@@ -101,9 +119,7 @@ export default function Navbar() {
 
             <div className="h-6 w-px bg-slate-200 dark:bg-white/10" />
 
-            {/* Header Action Buttons: Cart, Wishlist, Login, Orders, Admin (Icon Only) */}
             <div className="flex items-center gap-2">
-              {/* Cart Header Button */}
               <button
                 onClick={() => setIsCartOpen(true)}
                 className="p-2.5 rounded-full bg-gradient-to-r from-pink-500 to-rose-600 text-white shadow-md shadow-pink-500/20 hover:scale-105 active:scale-95 transition-all relative flex items-center justify-center"
@@ -117,7 +133,6 @@ export default function Navbar() {
                 )}
               </button>
 
-              {/* Wishlist Header Button */}
               <button
                 onClick={() => setIsWishlistOpen(true)}
                 className="p-2.5 rounded-full bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-900/40 text-rose-600 dark:text-rose-300 transition-all border border-rose-200 dark:border-rose-800/40 relative flex items-center justify-center"
@@ -131,7 +146,6 @@ export default function Navbar() {
                 )}
               </button>
 
-              {/* Account / Login Header Button */}
               <button
                 onClick={() => setIsAuthModalOpen(true)}
                 className="p-2.5 rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-white transition-all border border-slate-200 dark:border-slate-700 flex items-center justify-center"
@@ -140,7 +154,6 @@ export default function Navbar() {
                 <UserIcon size={16} className="text-pink-500" />
               </button>
 
-              {/* My Orders Header Button */}
               {(() => {
                 const activeOrderCount = (user && user.isLoggedIn) ? orders.length : 0;
                 return (
@@ -165,34 +178,35 @@ export default function Navbar() {
                 );
               })()}
 
-              {/* Owner Admin Shield Button */}
-              {(() => {
-                const cleanPhone = (user?.phone || '').replace(/\D/g, '');
-                const isAdmin = user?.isLoggedIn && (cleanPhone.endsWith('8584017701') || cleanPhone.endsWith('9875563329'));
-                return (
-                  <button
-                    onClick={isAdmin ? () => setIsOwnerPortalOpen(true) : undefined}
-                    title={isAdmin ? "Owner Admin Portal" : undefined}
-                    className={`p-1 rounded-full transition-all border flex items-center justify-center shrink-0 ${
-                      isAdmin 
-                        ? 'bg-amber-500 text-slate-900 border-amber-300 shadow-md cursor-pointer hover:scale-105 active:scale-95' 
-                        : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 cursor-default opacity-80 pointer-events-none'
-                    }`}
-                  >
-                    <img 
-                      src="https://i.ibb.co/wrc3VVRg/PROFILE.jpg" 
-                      alt="" 
-                      className="w-6 h-6 rounded-full object-cover border border-amber-300 shadow-sm shrink-0" 
-                      referrerPolicy="no-referrer"
-                    />
-                  </button>
-                );
-              })()}
+              <button
+                onClick={async () => {
+                  if (requestNotifications) {
+                    const granted = await requestNotifications();
+                    if (granted) {
+                      alert(lang === 'en' ? '✅ Push Notifications Enabled!' : '✅ পুশ নোটিফিকেশন চালু করা হয়েছে!');
+                    }
+                  }
+                }}
+                className="p-2.5 rounded-full bg-pink-50 dark:bg-pink-950/40 hover:bg-pink-100 dark:hover:bg-pink-900/40 text-pink-600 dark:text-pink-300 transition-all border border-pink-200 dark:border-pink-800/40 flex items-center justify-center relative cursor-pointer"
+                title={lang === 'en' ? 'Enable Order Status Alerts' : 'অর্ডার স্ট্যাটাস এলার্ট চালু করুন'}
+              >
+                <Bell size={16} className="text-pink-500 animate-pulse" />
+                <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-pink-500 ring-2 ring-white dark:ring-slate-900" />
+              </button>
+
+              {isAdminLoggedIn && (
+                <button
+                  onClick={() => setIsWorkspaceOpen(true)}
+                  title="Google Workspace Hub & Admin Portal"
+                  className="p-2.5 rounded-full bg-amber-500 text-slate-900 border border-amber-300 shadow-md cursor-pointer hover:scale-105 active:scale-95 flex items-center justify-center shrink-0"
+                >
+                  <HardDrive size={16} />
+                </button>
+              )}
             </div>
 
             <div className="h-6 w-px bg-slate-200 dark:bg-white/10" />
 
-            {/* MORE Dropdown Trigger */}
             <div className="relative" ref={dropdownRef}>
               <button
                 onClick={() => setMoreDropdownOpen(!moreDropdownOpen)}
@@ -203,7 +217,6 @@ export default function Navbar() {
                 <ChevronDown size={14} className={cn("transition-transform duration-300", moreDropdownOpen && "rotate-180")} />
               </button>
 
-              {/* MORE Dropdown Menu Popup */}
               <AnimatePresence>
                 {moreDropdownOpen && (
                   <motion.div
@@ -213,10 +226,9 @@ export default function Navbar() {
                     className="absolute right-0 mt-2 w-72 p-4 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 z-50 space-y-4"
                   >
                     <div className="text-[10px] uppercase font-black tracking-widest text-slate-400 border-b border-slate-100 dark:border-slate-800 pb-2">
-                      {lang === 'en' ? 'Quick Controls & Atmosphere' : 'কন্ট্রোল ও থিম অপশন'}
+                      {lang === 'en' ? 'Quick Controls' : 'কন্ট্রোল অপশন'}
                     </div>
 
-                    {/* Weather Widget */}
                     <div>
                       <span className="text-xs font-bold text-slate-600 dark:text-slate-400 block mb-1">
                         {lang === 'en' ? 'Weather Theme:' : 'ওয়েদার থিম:'}
@@ -226,26 +238,6 @@ export default function Navbar() {
 
                     <div className="h-px bg-slate-100 dark:bg-slate-800" />
 
-                    {/* Google Workspace Hub Trigger */}
-                    <button
-                      onClick={() => {
-                        setIsWorkspaceOpen(true);
-                        setMoreDropdownOpen(false);
-                      }}
-                      className="w-full flex items-center justify-between p-3 rounded-xl bg-gradient-to-r from-emerald-500/10 to-teal-500/10 hover:from-emerald-500/20 hover:to-teal-500/20 text-emerald-700 dark:text-emerald-300 font-bold text-xs border border-emerald-500/30 transition-all group"
-                    >
-                      <div className="flex items-center gap-2">
-                        <HardDrive size={16} className="text-emerald-500 group-hover:scale-110 transition-transform" />
-                        <span>{lang === 'en' ? 'Google Drive & Sheets' : 'গুগল ড্রাইভ ও শিট'}</span>
-                      </div>
-                      <span className="text-[9px] bg-emerald-500 text-white font-extrabold px-1.5 py-0.5 rounded-full">
-                        HUB
-                      </span>
-                    </button>
-
-                    <div className="h-px bg-slate-100 dark:bg-slate-800" />
-
-                    {/* Dark/Light Mode & Language Controls */}
                     <div className="grid grid-cols-2 gap-2">
                       <button
                         onClick={toggleTheme}
@@ -253,7 +245,7 @@ export default function Navbar() {
                       >
                         {theme === 'dark' ? <Sun size={18} className="text-amber-400 mb-1" /> : <Moon size={18} className="text-blue-500 mb-1" />}
                         <span className="text-[10px] font-bold uppercase tracking-wider">
-                          {theme === 'dark' ? (lang === 'en' ? 'Light Mode' : 'লাইট মোড') : (lang === 'en' ? 'Dark Mode' : 'ডার্ক মোড')}
+                          {theme === 'dark' ? 'Light' : 'Dark'}
                         </span>
                       </button>
 
@@ -273,31 +265,41 @@ export default function Navbar() {
             </div>
           </div>
 
-          {/* Mobile Actions & Menu Toggle */}
-          <div className="flex lg:hidden items-center gap-2">
+          {/* Mobile: Action Buttons (Right) */}
+          <div className="flex lg:hidden items-center gap-1.5 flex-1 justify-end z-[115]">
+            {/* Dark / Light Mode Toggle Button */}
             <button
-              onClick={() => setIsCartOpen(true)}
-              className="p-2.5 rounded-full bg-gradient-to-r from-pink-500 to-rose-600 text-white shadow-md shadow-pink-500/30 flex items-center justify-center relative"
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleTheme();
+              }}
+              className="p-2 rounded-xl bg-slate-100/90 dark:bg-slate-800/90 text-slate-800 dark:text-white active:scale-95 transition-all shadow-sm border border-slate-200/80 dark:border-slate-700/80 touch-manipulation cursor-pointer select-none min-w-[38px] min-h-[38px] flex items-center justify-center shrink-0"
+              style={{ touchAction: 'manipulation' }}
+              title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
             >
-              <ShoppingCart size={18} />
-              {cart.length > 0 && (
-                <span className="absolute -top-1 -right-1 bg-amber-400 text-slate-900 font-extrabold text-[9px] w-4 h-4 rounded-full flex items-center justify-center border border-slate-900">
-                  {cart.length}
-                </span>
-              )}
+              {theme === 'dark' ? <Sun size={16} className="text-amber-400" /> : <Moon size={16} className="text-pink-500" />}
             </button>
 
-            <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="p-2.5 glass-3d text-slate-800 dark:text-white rounded-2xl active:scale-90 transition-transform"
-            >
-              {mobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
-            </button>
+            {/* Logout Button with Proper Logout Icon */}
+            {user?.isLoggedIn && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  logoutUser?.();
+                }}
+                className="px-2.5 py-1.5 rounded-xl bg-red-500/10 dark:bg-red-500/20 text-red-600 dark:text-red-400 font-bold text-xs active:scale-95 transition-all border border-red-500/30 flex items-center gap-1.5 touch-manipulation cursor-pointer select-none min-h-[38px] shrink-0"
+                style={{ touchAction: 'manipulation' }}
+              >
+                <LogOut size={14} />
+                <span className="text-[11px]">{t.nav.logout}</span>
+              </button>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Mobile Menu Overlay */}
       <AnimatePresence>
         {mobileMenuOpen && (
           <>
@@ -306,139 +308,232 @@ export default function Navbar() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setMobileMenuOpen(false)}
-              className="fixed inset-0 bg-black/50 backdrop-blur-md z-[90] lg:hidden"
+              className="fixed inset-0 bg-black/60 backdrop-blur-md z-[190] lg:hidden"
             />
             <motion.div 
-              initial={{ x: '100%' }}
+              initial={{ x: '-100%' }}
               animate={{ x: 0 }}
-              exit={{ x: '100%' }}
+              exit={{ x: '-100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="fixed top-0 right-0 bottom-0 w-[85%] sm:w-[350px] bg-white dark:bg-[#0a0a0a] z-[110] lg:hidden shadow-2xl border-l border-white/10 overflow-y-auto"
+              className="fixed top-0 left-0 bottom-0 w-[85%] sm:w-[350px] bg-white dark:bg-[#0c0d12] z-[200] lg:hidden shadow-2xl border-r border-slate-200 dark:border-white/10 overflow-y-auto"
             >
-              <div className="p-6 pt-20 flex flex-col gap-4">
-                <div className="flex flex-col gap-1 mb-2">
-                   <span className="font-serif text-2xl font-bold text-slate-800 dark:text-white leading-none tracking-tight">
-                    {t.brand}
-                  </span>
-                  <span className="text-[10px] text-pink-600 dark:text-pink-400 font-black tracking-widest uppercase">
-                    {t.tag}
-                  </span>
+              <div className="p-5 pt-12 flex flex-col gap-4">
+                {/* Header inside drawer */}
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-white/10">
+                  <div className="flex flex-col gap-0.5">
+                    <span className="font-serif text-xl font-bold text-slate-800 dark:text-white leading-none tracking-tight">
+                      {t.brand}
+                    </span>
+                    <span className="text-[10px] text-pink-600 dark:text-pink-400 font-black tracking-widest uppercase">
+                      {t.tag}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setMobileMenuOpen(false)}
+                    className="p-2 rounded-full bg-slate-100 dark:bg-white/10 text-slate-500 hover:text-slate-800 dark:hover:text-white transition-colors min-w-[36px] min-h-[36px] flex items-center justify-center touch-manipulation cursor-pointer"
+                    style={{ touchAction: 'manipulation' }}
+                  >
+                    <X size={18} />
+                  </button>
                 </div>
 
-                {/* Primary Quick Actions for Mobile */}
-                <div className="grid grid-cols-2 gap-2 my-2">
+                {/* Account & Profile Options Section */}
+                <div className="space-y-2">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block px-1">
+                    👤 {lang === 'en' ? 'Account & Orders' : 'অ্যাকাউন্ট ও অর্ডার'}
+                  </span>
+
+                  {/* 1. Login / Profile Option */}
                   <button
-                    onClick={() => { setIsCartOpen(true); setMobileMenuOpen(false); }}
-                    className="p-3 rounded-xl bg-pink-50 dark:bg-pink-950/40 text-pink-600 dark:text-pink-300 font-bold text-xs flex items-center justify-center gap-2 border border-pink-200 dark:border-pink-800/40"
+                    type="button"
+                    onClick={() => {
+                      setIsAuthModalOpen(true);
+                      setMobileMenuOpen(false);
+                    }}
+                    className="flex items-center justify-between w-full p-3 rounded-2xl bg-pink-50/80 dark:bg-pink-950/30 border border-pink-200/60 dark:border-pink-800/40 hover:bg-pink-100 dark:hover:bg-pink-900/40 text-slate-800 dark:text-white font-bold text-xs transition-all touch-manipulation cursor-pointer"
+                    style={{ touchAction: 'manipulation' }}
                   >
-                    <ShoppingCart size={16} />
-                    {lang === 'en' ? 'Cart' : 'কার্ট'} ({cart.length})
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-xl bg-pink-500 text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-sm">
+                        <UserIcon size={16} />
+                      </div>
+                      <div className="flex flex-col text-left">
+                        <span className="font-bold text-xs">
+                          {user?.isLoggedIn 
+                            ? (user.name || (lang === 'en' ? 'My Profile' : 'মাই প্রোফাইল')) 
+                            : (lang === 'en' ? 'Login / Register' : 'লগইন / রেজিস্টার')}
+                        </span>
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 font-normal">
+                          {user?.isLoggedIn ? user.email : (lang === 'en' ? 'Manage your account' : 'অ্যাকাউন্ট ম্যানেজ করুন')}
+                        </span>
+                      </div>
+                    </div>
+                    <ChevronRight size={16} className="text-pink-500" />
                   </button>
 
+                  {/* 2. Order History Option */}
                   <button
-                    onClick={() => { setIsWishlistOpen(true); setMobileMenuOpen(false); }}
-                    className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-300 font-bold text-xs flex items-center justify-center gap-2 border border-rose-200 dark:border-rose-800/40"
+                    type="button"
+                    onClick={() => {
+                      if (!user || !user.isLoggedIn) {
+                        setIsAuthModalOpen(true);
+                      } else {
+                        setIsOrderHistoryOpen(true);
+                      }
+                      setMobileMenuOpen(false);
+                    }}
+                    className="flex items-center justify-between w-full p-3 rounded-2xl bg-slate-50 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-white/10 text-slate-800 dark:text-white font-bold text-xs transition-all touch-manipulation cursor-pointer"
+                    style={{ touchAction: 'manipulation' }}
                   >
-                    <Heart size={16} className="fill-rose-500 text-rose-500" />
-                    {lang === 'en' ? 'Wishlist' : 'উইশলিস্ট'} ({wishlist.length})
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold text-xs shrink-0">
+                        <Clock size={16} />
+                      </div>
+                      <div className="flex flex-col text-left">
+                        <span className="font-bold text-xs">
+                          {lang === 'en' ? 'Order History' : 'অর্ডার হিস্ট্রি'}
+                        </span>
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 font-normal">
+                          {lang === 'en' ? 'Track recent orders' : 'পূর্ববর্তী অর্ডার তালিকা'}
+                        </span>
+                      </div>
+                    </div>
+                    {orders.length > 0 ? (
+                      <span className="px-2 py-0.5 rounded-full bg-amber-500 text-white font-black text-[10px]">
+                        {orders.length}
+                      </span>
+                    ) : (
+                      <ChevronRight size={16} className="text-slate-400" />
+                    )}
                   </button>
 
+                  {/* 3. Wishlist Option */}
                   <button
-                    onClick={() => { setIsAuthModalOpen(true); setMobileMenuOpen(false); }}
-                    className="p-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-white font-bold text-xs flex items-center justify-center gap-2 border border-slate-200 dark:border-slate-700"
+                    type="button"
+                    onClick={() => {
+                      setIsWishlistOpen(true);
+                      setMobileMenuOpen(false);
+                    }}
+                    className="flex items-center justify-between w-full p-3 rounded-2xl bg-slate-50 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-white/10 text-slate-800 dark:text-white font-bold text-xs transition-all touch-manipulation cursor-pointer"
+                    style={{ touchAction: 'manipulation' }}
                   >
-                    <UserIcon size={16} className="text-pink-500" />
-                    {user?.isLoggedIn ? user.name : (lang === 'en' ? 'Account' : 'অ্যাকাউন্ট')}
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-xl bg-rose-500/20 text-rose-600 dark:text-rose-400 flex items-center justify-center font-bold text-xs shrink-0">
+                        <Heart size={16} className="fill-rose-500/30 text-rose-500" />
+                      </div>
+                      <div className="flex flex-col text-left">
+                        <span className="font-bold text-xs">
+                          {lang === 'en' ? 'Wishlist' : 'উইশলিস্ট (পছন্দের তালিকা)'}
+                        </span>
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 font-normal">
+                          {lang === 'en' ? 'Saved items' : 'সেভ করা কেক ও ডেজার্ট'}
+                        </span>
+                      </div>
+                    </div>
+                    {wishlist.length > 0 ? (
+                      <span className="px-2 py-0.5 rounded-full bg-rose-500 text-white font-black text-[10px]">
+                        {wishlist.length}
+                      </span>
+                    ) : (
+                      <ChevronRight size={16} className="text-slate-400" />
+                    )}
                   </button>
+                </div>
 
-                  <button
-                    onClick={() => { setIsOrderHistoryOpen(true); setMobileMenuOpen(false); }}
-                    className="p-3 rounded-xl bg-slate-900 text-white font-bold text-xs flex items-center justify-center gap-2 border border-slate-700"
-                  >
-                    <Clock size={16} className="text-amber-400" />
-                    {lang === 'en' ? 'My Orders' : 'আমার অর্ডার'} ({orders.length})
-                  </button>
-
-                  {(() => {
-                    const cleanPhone = (user?.phone || '').replace(/\D/g, '');
-                    const isAdmin = user?.isLoggedIn && (cleanPhone.endsWith('8584017701') || cleanPhone.endsWith('9875563329'));
-                    return (
+                {/* Mobile Admin Hub & Logout buttons if applicable */}
+                {(isAdminLoggedIn || user?.isLoggedIn) && (
+                  <div className="grid grid-cols-1 gap-2 pt-1">
+                    {isAdminLoggedIn && (
                       <button
-                        onClick={isAdmin ? () => { setIsOwnerPortalOpen(true); setMobileMenuOpen(false); } : undefined}
-                        className={`p-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 border ${
-                          isAdmin 
-                            ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/40 cursor-pointer shadow-sm' 
-                            : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-600 border-slate-200 dark:border-slate-700 cursor-default opacity-50'
-                        }`}
+                        type="button"
+                        onClick={() => { setIsWorkspaceOpen(true); setMobileMenuOpen(false); }}
+                        className="p-2.5 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/40 font-bold text-xs flex items-center justify-center gap-2 touch-manipulation cursor-pointer"
+                        style={{ touchAction: 'manipulation' }}
                       >
-                        <img 
-                          src="https://i.ibb.co/wrc3VVRg/PROFILE.jpg" 
-                          alt="Musu (Owner)" 
-                          className="w-6 h-6 rounded-full object-cover border border-amber-400 shadow-sm shrink-0" 
-                          referrerPolicy="no-referrer"
-                        />
-                        <span>{lang === 'en' ? 'Owner Portal' : 'মালিক পোর্টাল'}</span>
+                        <HardDrive size={16} />
+                        <span>{lang === 'en' ? 'Admin Hub' : 'অ্যাডমিন হাব'}</span>
                       </button>
-                    );
-                  })()}
+                    )}
+
+                    {user?.isLoggedIn && (
+                      <button
+                        type="button"
+                        onClick={() => { logoutUser(); setMobileMenuOpen(false); }}
+                        className="p-2.5 rounded-xl bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 font-bold text-xs flex items-center justify-center gap-2 touch-manipulation cursor-pointer"
+                        style={{ touchAction: 'manipulation' }}
+                      >
+                        <LogOut size={16} />
+                        <span>{lang === 'en' ? 'Logout' : 'লগআউট'}</span>
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                <div className="h-px bg-slate-200 dark:bg-white/10 my-1" />
+
+                {/* Navigation items */}
+                <div className="space-y-1">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block px-1 mb-1">
+                    📍 {lang === 'en' ? 'Navigation' : 'ন্যাভিগেশন'}
+                  </span>
+                  {navItems.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => scrollToSection(item.id)}
+                      className="flex items-center gap-3.5 px-3.5 py-2.5 text-xs font-black text-slate-800 dark:text-white hover:text-pink-600 text-left hover:bg-pink-50 dark:hover:bg-white/5 rounded-xl transition-all uppercase tracking-wider group touch-manipulation cursor-pointer"
+                      style={{ touchAction: 'manipulation' }}
+                    >
+                      <item.icon size={16} className="text-pink-500 group-hover:scale-110 transition-transform" />
+                      {t.nav[item.id]}
+                    </button>
+                  ))}
                 </div>
 
-                <div className="h-px bg-slate-200 dark:bg-white/10 my-2" />
+                <div className="h-px bg-slate-200 dark:bg-white/10 my-1" />
 
-                {/* Nav Links */}
-                {navItems.map((item) => (
-                  <button
-                    key={item.id}
-                    onClick={() => scrollToSection(item.id)}
-                    className="flex items-center gap-4 px-4 py-3 text-xs font-black text-slate-800 dark:text-white hover:text-pink-600 text-left hover:bg-pink-50 dark:hover:bg-white/5 rounded-xl transition-all uppercase tracking-wider group"
-                  >
-                    <item.icon size={18} className="text-pink-500 group-hover:scale-110 transition-transform" />
-                    {t.nav[item.id]}
-                  </button>
-                ))}
-                
-                <div className="h-px bg-slate-200 dark:bg-white/10 my-2" />
-                
-                {/* Weather & Settings Dropdown Controls */}
-                <div className="space-y-3 bg-slate-50 dark:bg-slate-900 p-4 rounded-2xl border border-slate-200 dark:border-slate-800">
-                  <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider block">
-                    {lang === 'en' ? 'MORE OPTIONS' : 'আরও অপশন'}
+                {/* Quick Controls Section in Mobile Drawer */}
+                <div className="space-y-3">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block px-1">
+                    ⚙️ {lang === 'en' ? 'Quick Controls' : 'কন্ট্রোল অপশন'}
                   </span>
-                  
-                  <div className="flex justify-center">
+
+                  {/* Weather Theme Adjuster */}
+                  <div className="p-3 rounded-2xl bg-slate-50 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 space-y-2">
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300 block">
+                      {lang === 'en' ? 'Weather Theme:' : 'ওয়েদার থিম:'}
+                    </span>
                     <WeatherWidget />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2 pt-2">
-                    <button onClick={toggleTheme} className="flex flex-col items-center justify-center p-3 rounded-xl bg-white dark:bg-slate-800 text-slate-800 dark:text-white font-bold text-xs border border-slate-200 dark:border-slate-700">
-                      {theme === 'dark' ? <Sun size={18} className="text-amber-400 mb-1" /> : <Moon size={18} className="text-blue-500 mb-1" />}
-                      <span className="text-[10px] uppercase">{theme === 'dark' ? 'Light' : 'Dark'}</span>
-                    </button>
+                  {/* Theme & Language Toggle Grid */}
+                  <div className="grid grid-cols-2 gap-2">
                     <button
-                      onClick={() => { setLang(lang === 'en' ? 'bn' : 'en'); setMobileMenuOpen(false); }}
-                      className="flex flex-col items-center justify-center p-3 rounded-xl bg-pink-50 dark:bg-pink-950/40 text-pink-600 dark:text-pink-400 font-black uppercase text-xs border border-pink-200 dark:border-pink-800/40"
+                      type="button"
+                      onClick={() => toggleTheme()}
+                      className="flex items-center justify-center gap-2 p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-white font-bold text-xs transition-all border border-slate-200 dark:border-slate-700 touch-manipulation cursor-pointer"
+                      style={{ touchAction: 'manipulation' }}
                     >
-                      <Globe size={18} className="mb-1" />
-                      {t.nav.langToggle}
+                      {theme === 'dark' ? <Sun size={15} className="text-amber-400" /> : <Moon size={15} className="text-blue-500" />}
+                      <span className="text-[11px]">
+                        {theme === 'dark' ? (lang === 'en' ? 'Light' : 'লাইট') : (lang === 'en' ? 'Dark' : 'ডার্ক')}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setLang(lang === 'en' ? 'bn' : 'en')}
+                      className="flex items-center justify-center gap-2 p-2.5 rounded-xl bg-pink-50 dark:bg-pink-950/40 hover:bg-pink-100 dark:hover:bg-pink-900/40 text-pink-600 dark:text-pink-400 font-bold text-xs transition-all border border-pink-200 dark:border-pink-800/40 touch-manipulation cursor-pointer"
+                      style={{ touchAction: 'manipulation' }}
+                    >
+                      <Globe size={15} />
+                      <span className="text-[11px]">
+                        {t.nav.langToggle}
+                      </span>
                     </button>
                   </div>
-
-                  <button
-                    onClick={() => { setIsWorkspaceOpen(true); setMobileMenuOpen(false); }}
-                    className="w-full flex items-center justify-center gap-2 p-3 rounded-xl bg-emerald-600 text-white font-bold text-xs shadow-md mt-2"
-                  >
-                    <HardDrive size={16} />
-                    <span>{lang === 'en' ? 'Google Drive & Sheets' : 'গুগল ড্রাইভ ও শিট'}</span>
-                  </button>
                 </div>
-
-                <button
-                  onClick={() => { setOrderModalOpen(true); setMobileMenuOpen(false); }}
-                  className="w-full py-4 bg-gradient-to-r from-pink-500 via-rose-500 to-amber-500 text-white rounded-2xl font-black uppercase tracking-widest text-xs flex items-center justify-center gap-3 shadow-xl shadow-pink-500/20 active:scale-95 transition-all mt-2"
-                >
-                  <Send size={18} />
-                  Direct Order
-                </button>
               </div>
             </motion.div>
           </>
@@ -447,4 +542,3 @@ export default function Navbar() {
     </nav>
   );
 }
-

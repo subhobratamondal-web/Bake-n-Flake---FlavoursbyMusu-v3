@@ -24,10 +24,10 @@ export interface Review {
   timeEn: string;
   timeBn: string;
   rating: number;
-  date: Date;
+  date?: Date;
   textEn: string;
   textBn: string;
-  avatar: string;
+  avatar?: string;
   recommends?: boolean;
   badgeEn?: string;
   badgeBn?: string;
@@ -35,6 +35,8 @@ export interface Review {
   ownerReplyBn?: string;
   topics?: string[];
   likes?: number;
+  reviewImages?: string[];
+  source?: 'google' | 'facebook' | 'web';
 }
 
 export interface GalleryData {
@@ -145,6 +147,7 @@ export interface Order {
   userReview?: {
     rating: number;
     comment: string;
+    photoUrl?: string;
     timestamp: string;
   };
   isThanksSent?: boolean;

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useContext, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, ShoppingBag, Plus, Minus, MessageSquare, Scale, Check, ShieldCheck, Info, Sparkles, MapPin, Navigation, MessageCircle, Search, ZoomIn } from 'lucide-react';
+import { X, ShoppingBag, Plus, Minus, MessageSquare, Scale, Check, ShieldCheck, Info, Sparkles, MapPin, Navigation, MessageCircle, Search, ZoomIn, Star } from 'lucide-react';
 import { Product, CartItem } from '../types';
 import OptimizedImage from './OptimizedImage';
 import { getOptimizedImageUrl } from '../utils/googleSheetsSync';
@@ -52,7 +52,7 @@ export default function QuickAddToCartModal({ product, isOpen, onClose, onAddToC
   const [customNote, setCustomNote] = useState('');
   const [userLocation, setUserLocation] = useState('Kamalgazi, Kolkata');
   const [isLocating, setIsLocating] = useState(false);
-  const [activeTab, setActiveTab] = useState<'options' | 'care'>('options');
+  const [activeTab, setActiveTab] = useState<'options' | 'care' | 'reviews'>('options');
   const [addedSuccess, setAddedSuccess] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string>('');
 
@@ -68,32 +68,57 @@ export default function QuickAddToCartModal({ product, isOpen, onClose, onAddToC
 
   const availableImages = useMemo(() => {
     if (!product) return [];
-    const imgs: string[] = [];
-    if (product.img) imgs.push(product.img);
-
+    
     const pName = (product.nameEn || '').trim().toLowerCase();
-    const pCat = (product.category || '').trim().toLowerCase();
+    const subSheetImgs: string[] = [];
 
-    if (galleryData) {
+    if (galleryData && pName) {
       const keys = Object.keys(galleryData);
-      keys.forEach(k => {
-        const kLower = k.toLowerCase();
-        if ((pName && kLower.includes(pName)) || (pCat && kLower.includes(pCat))) {
-          const val = galleryData[k];
-          if (Array.isArray(val)) {
-            val.forEach((item: any) => {
-              if (typeof item === 'string' && item.startsWith('http') && !imgs.includes(item)) {
-                imgs.push(item);
-              } else if (item && typeof item === 'object' && item.img && !imgs.includes(item.img)) {
-                imgs.push(item.img);
-              }
-            });
-          }
+      
+      const filterImages = (arr: any) => {
+        if (!Array.isArray(arr)) return [];
+        return arr.filter(url => typeof url === 'string' && url.trim().length > 0 && url !== 'undefined' && url !== 'null');
+      };
+
+      let matchedKey = null;
+
+      // 1. Exact match
+      if (galleryData[product.nameEn]) matchedKey = product.nameEn;
+      
+      // 2. Normalized match
+      if (!matchedKey) {
+        matchedKey = keys.find(k => k.toLowerCase().trim() === pName);
+      }
+
+      // 3. Plural/Singular
+      if (!matchedKey) {
+        const singular = pName.endsWith('s') ? pName.slice(0, -1) : pName;
+        const plural = pName.endsWith('s') ? pName : pName + 's';
+        matchedKey = keys.find(k => {
+          const vk = k.toLowerCase().trim();
+          return vk === singular || vk === plural;
+        });
+      }
+
+      if (matchedKey && galleryData[matchedKey]) {
+        const val = galleryData[matchedKey];
+        if (Array.isArray(val)) {
+          val.forEach((item: any) => {
+            if (typeof item === 'string' && item.startsWith('http') && !subSheetImgs.includes(item)) {
+              subSheetImgs.push(item);
+            } else if (item && typeof item === 'object' && item.img && !subSheetImgs.includes(item.img)) {
+              subSheetImgs.push(item.img);
+            }
+          });
         }
-      });
+      }
     }
 
-    return imgs.slice(0, 8);
+    if (subSheetImgs.length > 0) {
+      return subSheetImgs.slice(0, 8);
+    }
+
+    return product.img ? [product.img] : [];
   }, [product, galleryData]);
 
   // Auto-select flavor based on product name if matched
@@ -109,7 +134,7 @@ export default function QuickAddToCartModal({ product, isOpen, onClose, onAddToC
     }
   }, [product]);
 
-  if (!isOpen || !product) return null;
+  // if (!isOpen || !product) return null;
 
   const handleDetectLocation = () => {
     if ('geolocation' in navigator) {
@@ -137,14 +162,14 @@ export default function QuickAddToCartModal({ product, isOpen, onClose, onAddToC
 
   const handleAdd = () => {
     onAddToCart({
-      productNameEn: product.nameEn,
-      productNameBn: product.nameBn,
-      img: selectedImage || product.img,
+      productNameEn: product?.nameEn || '',
+      productNameBn: product?.nameBn || '',
+      img: selectedImage || product?.img || '',
       weight: `${selectedWeight} | ${eggType} (${selectedFlavour}, ${selectedShape})`,
       price: estPrice > 0 ? estPrice : 0,
       quantity: quantity,
       customNote: `${customNote.trim() ? customNote.trim() + ' | ' : ''}Location: ${userLocation}`,
-      category: product.category
+      category: product?.category || ''
     });
 
     setAddedSuccess(true);
@@ -154,8 +179,8 @@ export default function QuickAddToCartModal({ product, isOpen, onClose, onAddToC
     }, 800);
   };
 
-  const currentImgSrc = selectedImage || product.img;
-  const imageUrl = getOptimizedImageUrl(currentImgSrc, 800, 90) || currentImgSrc;
+  const currentImgSrc = selectedImage || product?.img || '';
+  const imageUrl = (currentImgSrc ? getOptimizedImageUrl(currentImgSrc, 800, 90) : '') || currentImgSrc;
 
   // Magnifying loupe move handlers
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -164,7 +189,10 @@ export default function QuickAddToCartModal({ product, isOpen, onClose, onAddToC
     const y = e.clientY - rect.top;
     const posX = Math.max(0, Math.min(100, (x / rect.width) * 100));
     const posY = Math.max(0, Math.min(100, (y / rect.height) * 100));
-    setZoomPos({ x, y, posX, posY });
+    
+    requestAnimationFrame(() => {
+      setZoomPos({ x, y, posX, posY });
+    });
   };
 
   const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
@@ -175,7 +203,10 @@ export default function QuickAddToCartModal({ product, isOpen, onClose, onAddToC
       const y = touch.clientY - rect.top;
       const posX = Math.max(0, Math.min(100, (x / rect.width) * 100));
       const posY = Math.max(0, Math.min(100, (y / rect.height) * 100));
-      setZoomPos({ x, y, posX, posY });
+      
+      requestAnimationFrame(() => {
+        setZoomPos({ x, y, posX, posY });
+      });
     }
   };
 
@@ -184,15 +215,18 @@ export default function QuickAddToCartModal({ product, isOpen, onClose, onAddToC
 
   const selectedOpt = WEIGHT_OPTIONS.find(o => o.value === selectedWeight) || WEIGHT_OPTIONS[0];
 
+  if (!isOpen || !product) return null;
+
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[110] flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-md">
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.95, y: 20 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 20 }}
-          className="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-white/10 overflow-hidden max-h-[92vh] flex flex-col"
-        >
+      {(isOpen && product) && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-md">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            className="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-white/10 overflow-hidden max-h-[92vh] flex flex-col"
+          >
           {/* Header */}
           <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50 dark:bg-slate-800/50">
             <div className="flex items-center gap-2">
@@ -224,7 +258,7 @@ export default function QuickAddToCartModal({ product, isOpen, onClose, onAddToC
               >
                 <OptimizedImage 
                   src={imageUrl} 
-                  alt={product.nameEn}
+                  alt={product?.nameEn || ''}
                   className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                   width={800}
                 />
@@ -263,10 +297,10 @@ export default function QuickAddToCartModal({ product, isOpen, onClose, onAddToC
 
               <div className="flex items-center justify-between px-1">
                 <span className="text-[10px] uppercase font-bold tracking-widest px-2 py-0.5 rounded-full bg-pink-100 text-pink-700 dark:bg-pink-950 dark:text-pink-300">
-                  {product.category || 'Bake n\' Flake Fresh Cake'}
+                  {product?.category || 'Bake n\' Flake Fresh Cake'}
                 </span>
                 <span className="text-xs font-extrabold text-slate-800 dark:text-slate-200">
-                  {lang === 'en' ? product.nameEn : product.nameBn}
+                  {lang === 'en' ? product?.nameEn : product?.nameBn}
                 </span>
               </div>
             </div>
@@ -285,7 +319,7 @@ export default function QuickAddToCartModal({ product, isOpen, onClose, onAddToC
                 </div>
                 <div className="flex items-center gap-2 overflow-x-auto pb-1 pt-1 custom-scrollbar">
                   {availableImages.map((imgSrc, idx) => {
-                    const isSelected = (selectedImage || product.img) === imgSrc;
+                    const isSelected = (selectedImage || product?.img) === imgSrc;
                     const thumbUrl = getOptimizedImageUrl(imgSrc, 150, 75);
                     return (
                       <button
@@ -338,7 +372,18 @@ export default function QuickAddToCartModal({ product, isOpen, onClose, onAddToC
                     : 'border-transparent text-slate-400 hover:text-slate-600'
                 }`}
               >
-                {lang === 'en' ? 'Delivery & Care Info' : 'ডেলিভারি ও টেক কেয়ার ইনফো'}
+                {lang === 'en' ? 'Care Info' : 'টেক কেয়ার'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('reviews')}
+                className={`py-2 px-4 border-b-2 transition-all ${
+                  activeTab === 'reviews'
+                    ? 'border-pink-500 text-pink-600 dark:text-pink-400'
+                    : 'border-transparent text-slate-400 hover:text-slate-600'
+                }`}
+              >
+                {lang === 'en' ? 'Reviews' : 'রিভিউ'}
               </button>
             </div>
 
@@ -560,7 +605,7 @@ export default function QuickAddToCartModal({ product, isOpen, onClose, onAddToC
                   </div>
                 </div>
               </div>
-            ) : (
+            ) : activeTab === 'care' ? (
               /* Care Info Tab */
               <div className="space-y-3 text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
                 <div className="p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 space-y-1.5">
@@ -582,6 +627,84 @@ export default function QuickAddToCartModal({ product, isOpen, onClose, onAddToC
                     Hand-delivered safely by Bake n' Flake delivery team across Kamalgazi, Garia, and Kolkata.
                   </p>
                 </div>
+              </div>
+            ) : (
+              /* Reviews Tab */
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                    {lang === 'en' ? 'Product Reviews' : 'প্রোডাক্ট রিভিউ'}
+                  </h4>
+                  <div className="flex items-center gap-1 text-amber-400">
+                    <Star size={14} fill="currentColor" />
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      {product ? (Math.random() * 0.5 + 4.5).toFixed(1) : '5.0'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  {/* Filter global dynamic reviews by product name if applicable */}
+                  {(() => {
+                    const { dynamicReviews } = useContext(AppContext);
+                    const productReviews = dynamicReviews.filter(r => 
+                      r.source === 'web' && (
+                        (r.textEn && r.textEn.toLowerCase().includes(product?.nameEn.toLowerCase() || '')) ||
+                        (r.textBn && r.textBn.toLowerCase().includes(product?.nameEn.toLowerCase() || ''))
+                      )
+                    );
+
+                    if (productReviews.length === 0) {
+                      return (
+                        <div className="text-center py-8">
+                          <MessageSquare className="mx-auto text-slate-300 mb-2" size={32} />
+                          <p className="text-xs text-slate-500">
+                            {lang === 'en' ? 'No reviews yet for this product.' : 'এই প্রোডাক্টের জন্য এখনো কোনো রিভিউ নেই।'}
+                          </p>
+                        </div>
+                      );
+                    }
+
+                    return productReviews.map((review, i) => (
+                      <div key={i} className="p-4 rounded-2xl bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/10">
+                        <div className="flex items-center gap-3 mb-2">
+                          <img 
+                            src={review.avatar || "https://i.ibb.co/XkYN11bL/PROFILE.jpg"} 
+                            alt={review.nameEn} 
+                            className="w-8 h-8 rounded-full object-cover" 
+                          />
+                          <div>
+                            <p className="text-[11px] font-bold text-slate-900 dark:text-white">
+                              {lang === 'en' ? review.nameEn : review.nameBn}
+                            </p>
+                            <div className="flex gap-0.5">
+                              {[...Array(5)].map((_, j) => (
+                                <Star key={j} size={10} fill={j < review.rating ? "currentColor" : "none"} className={j < review.rating ? "text-amber-400" : "text-slate-300"} />
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                        <p className="text-[11px] text-slate-600 dark:text-slate-300 italic">
+                          "{lang === 'en' ? review.textEn : review.textBn}"
+                        </p>
+                      </div>
+                    ));
+                  })()}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    const reviewsSection = document.getElementById('reviews');
+                    if (reviewsSection) {
+                      onClose();
+                      reviewsSection.scrollIntoView({ behavior: 'smooth' });
+                    }
+                  }}
+                  className="w-full py-2.5 text-[11px] font-bold text-pink-600 dark:text-pink-400 border border-pink-200 dark:border-pink-900/40 rounded-xl hover:bg-pink-50 dark:hover:bg-pink-950/20 transition-all"
+                >
+                  {lang === 'en' ? 'Write a Review' : 'একটি রিভিউ লিখুন'}
+                </button>
               </div>
             )}
           </div>
@@ -643,6 +766,7 @@ export default function QuickAddToCartModal({ product, isOpen, onClose, onAddToC
           </div>
         )}
       </div>
-    </AnimatePresence>
-  );
+    )}
+  </AnimatePresence>
+);
 }

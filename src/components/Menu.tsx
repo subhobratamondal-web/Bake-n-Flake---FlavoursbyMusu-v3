@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from 'motion/react';
 import { ShoppingBag, ChevronRight, X, ExternalLink, Star, Facebook, ChevronLeft, Globe, Search, Cake, Gift, LayoutGrid, ShoppingCart, Heart, MessageSquare } from 'lucide-react';
 
 import { AppContext } from '../App';
-import { flavours, gifts, moreOptionsData } from '../constants/data';
 import { cn } from '../lib/utils';
 import { Product } from '../types';
 import { playSound } from '../lib/sounds';
@@ -86,17 +85,21 @@ function MenuItemCard({
     const isValidImage = (url: any) => typeof url === 'string' && url.trim().length > 0 && url !== 'undefined' && url !== 'null';
     
     const list: string[] = [];
-    if (Array.isArray(sheetImgs)) {
+    if (Array.isArray(sheetImgs) && sheetImgs.length > 0) {
       sheetImgs.forEach(u => {
         if (isValidImage(u) && !list.includes(u)) list.push(u);
       });
     }
-    if (isValidImage(item.img) && !list.includes(item.img)) {
-      list.push(item.img);
+    
+    if (list.length === 0) {
+      if (isValidImage(item.img) && !list.includes(item.img)) {
+        list.push(item.img);
+      }
+      if (linkMap[item.nameEn] && isValidImage(linkMap[item.nameEn]) && !list.includes(linkMap[item.nameEn])) {
+        list.push(linkMap[item.nameEn]);
+      }
     }
-    if (linkMap[item.nameEn] && isValidImage(linkMap[item.nameEn]) && !list.includes(linkMap[item.nameEn])) {
-      list.push(linkMap[item.nameEn]);
-    }
+    
     return list.length > 0 ? list : ["https://i.ibb.co/Xx2kxrrg/LOGO-1.png"];
   }, [item, getProductImages]);
 
@@ -112,6 +115,8 @@ function MenuItemCard({
 
   const currentImage = allImages[imgIdx] || allImages[0];
 
+  const { trackMenuItemClick } = useContext(AppContext);
+
   return (
     <motion.div
       key={`${activeTab}-${item.nameEn}-${index}`}
@@ -123,6 +128,9 @@ function MenuItemCard({
       className="group cursor-pointer w-full flex flex-col"
       onClick={() => {
         playSound('ding');
+        if (trackMenuItemClick) {
+          trackMenuItemClick(item.nameEn);
+        }
         setSelectedProduct(item);
       }}
     >
@@ -219,6 +227,7 @@ function MenuItemCard({
 export default function Menu() {
   const { t, galleryData, setOrderModalOpen, loading, openQuickAddToCart, toggleWishlist, isWishlisted } = useContext(AppContext);
   const [activeTab, setActiveTab] = useState<string>('Signature');
+  const [activeSubTab, setActiveSubTab] = useState<string>('All');
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
@@ -229,13 +238,30 @@ export default function Menu() {
   const observerRef = React.useRef<IntersectionObserver | null>(null);
   const loadMoreRef = React.useRef<HTMLDivElement>(null);
 
-  // Rating state
-  const [ratings, setRatings] = useState<Record<string, number>>({});
+  const subTabsMap: Record<string, string[]> = {
+    'Signature': ['All', 'Chocolate Cakes', 'Butterscotch Cakes', 'Chocolate & Truffle', 'Fruit Section', 'Butterscotch & Vanilla', 'Strawberry & Red Velvet', 'Forest & Drinks', 'Sweets lovers'],
+    'Gifting': ['All', 'Birthday & Anniversary', 'Special Day', 'Christmas Cake'],
+    'More Items': ['All', 'BNF Special', 'Small Dhamaka', 'Cheesecake', 'Pizza & Brownies', 'Kids Section']
+  };
 
-  // Reset limit when tab or search changes
+  // Reset limit when tab or sub-tab or search changes
   useEffect(() => {
     setDisplayLimit(12);
-  }, [activeTab, searchQuery]);
+  }, [activeTab, activeSubTab, searchQuery]);
+
+  const handleTabChange = (tabId: string) => {
+    playSound('pop');
+    setActiveTab(tabId);
+    setActiveSubTab('All');
+    setSearchQuery('');
+    
+    const menuElement = document.getElementById('menu');
+    if (menuElement) {
+      const yOffset = -80;
+      const y = menuElement.getBoundingClientRect().top + window.pageYOffset + yOffset;
+      window.scrollTo({ top: y, behavior: 'smooth' });
+    }
+  };
 
   // Setup Intersection Observer
   useEffect(() => {
@@ -262,126 +288,55 @@ export default function Menu() {
   }, [activeTab, searchQuery, galleryData]); // Re-bind observer if data potentially changes
 
   // Group Dynamic items from galleryData
-  const dynamicItems = (galleryData.items || []) as any[];
+  const dynamicItems = React.useMemo(() => (galleryData?.items || []) as any[], [galleryData?.items]);
   
   // Define base categories and labels
-  const baseSections = [
+  const baseSections = React.useMemo(() => [
+
     { id: 'Signature', label: t.categories.navSignature, tag: t.categories.catTag, title: "Our Signature Cakes", icon: Cake },
     { id: 'Gifting', label: t.categories.navGifting, tag: t.categories.giftTag, title: t.categories.giftTitle, icon: Gift },
-    { id: 'More', label: t.categories.navMore, tag: t.categories.moreTag, title: t.categories.moreTitle, icon: LayoutGrid }
-  ];
+    { id: 'More Items', label: t.categories.navMore, tag: t.categories.moreTag, title: t.categories.moreTitle, icon: LayoutGrid }
+  
+  ], [t]);
 
   // Helper to map sheet section strings to known IDs
   const mapSection = (s: string) => {
     if (!s) return 'Signature';
     const normalized = s.toLowerCase().trim();
     
-    // Explicitly ignore boolean strings that might come from misaligned columns
     if (normalized === 'true' || normalized === 'false') return 'Signature';
 
-    // Direct matches for base categories
-    if (normalized === 'signature' || normalized === 'কেকস' || normalized === 'cakes') return 'Signature';
-    if (normalized === 'gifting' || normalized === 'gifts' || normalized === 'উপহার') return 'Gifting';
-    if (normalized === 'more' || normalized === 'more items' || normalized === 'অন্যান্য' || normalized === 'more items') return 'More';
-
-    // User requested "Explore the Rest (Something More)" to be captured in "More"
     if (normalized.includes('signature')) return 'Signature';
-    if (normalized.includes('gifting')) return 'Gifting';
-    if (normalized.includes('something more') || normalized.includes('explore the rest')) return 'More';
+    if (normalized.includes('gifting') || normalized.includes('gift')) return 'Gifting';
+    if (normalized.includes('more') || normalized.includes('explore') || normalized.includes('something')) return 'More Items';
     
-    // If it's a specific product category that used to be a tab, don't swallow it into Signature if it doesn't match perfectly
-    // or if it's "Chocolate Cakes" and they want it as a tab
-    if (normalized === 'chocolate cakes' || normalized === 'chocolate cake') return s.charAt(0).toUpperCase() + s.slice(1);
-
-    // Fallback grouping for general cake keywords to ensure they land somewhere safe if not specified
-    if (normalized.includes('কেকস')) return 'Signature';
-
-    return s.charAt(0).toUpperCase() + s.slice(1); // Custom section name
+    return 'Signature'; // Default to Signature for any other items
   };
 
-  // Get all unique sections from data, but prioritize standard ones first
-  const sheetSections = Array.from(new Set(dynamicItems.map(it => {
-    const s = String(it.section || '').trim();
-    if (s.toLowerCase() === 'true' || s.toLowerCase() === 'false') return null;
-    return s;
-  }).filter(Boolean))) as string[];
-  
-  // We want to ensure Signature, Gifting, More are always present if they have content, 
-  // and in that specific order.
-  const dynamicSectionIds = [
-    'Signature', 'Gifting', 'More',
-    ...sheetSections.map(mapSection).filter(s => !['Signature', 'Gifting', 'More'].includes(s))
-  ];
+  // Unique list of sections
+  const activeSectionIds = React.useMemo(() => ['Signature', 'Gifting', 'More Items'], []);
 
-  // Unique list of sections that actually have items and are not just garbage/booleans
-  const activeSectionIds = Array.from(new Set(dynamicSectionIds)).filter(id => {
-    const lower = id.toLowerCase();
-    return lower !== 'true' && lower !== 'false' && lower !== '';
-  });
+  const getSectionData = React.useCallback((sectionId: string) => {
+    return dynamicItems.filter(it => mapSection(it.section) === sectionId);
+  }, [dynamicItems]);
 
-  const getSectionData = (sectionId: string) => {
-    // Collect all items that map to this sectionId
-    const items = dynamicItems.filter(it => mapSection(it.section) === sectionId);
-    
-    // Merge logic for base sections to ensure essential items like "Chocolate Cakes" aren't lost
-    // when the sheet only has a partial selection.
-    if (sectionId === 'Signature') {
-      const merged = [...items];
-      // Ensure essential items from flavours are present
-      flavours.forEach(f => {
-        const alreadyExists = merged.some(m => 
-          m.nameEn.toLowerCase().trim() === f.nameEn.toLowerCase().trim() ||
-          m.nameBn.toLowerCase().trim() === f.nameBn.toLowerCase().trim()
-        );
-        if (!alreadyExists) {
-          merged.unshift(f); // Prepend missing essentials
-        }
-      });
-      return merged;
-    }
-
-    if (sectionId === 'Gifting') {
-      const merged = [...items];
-      gifts.forEach(g => {
-        const alreadyExists = merged.some(m => 
-          m.nameEn.toLowerCase().trim() === g.nameEn.toLowerCase().trim() ||
-          m.nameBn.toLowerCase().trim() === g.nameBn.toLowerCase().trim()
-        );
-        if (!alreadyExists) merged.push(g);
-      });
-      return merged;
-    }
-
-    if (sectionId === 'More') {
-      const merged = [...items];
-      moreOptionsData.forEach(m => {
-        const alreadyExists = merged.some(item => 
-          item.nameEn.toLowerCase().trim() === m.nameEn.toLowerCase().trim() ||
-          item.nameBn.toLowerCase().trim() === m.nameBn.toLowerCase().trim()
-        );
-        if (!alreadyExists) merged.push(m);
-      });
-      return merged;
-    }
-    
-    return items;
-  };
-
-  const visibleTabs = activeSectionIds.map(id => {
-    const base = baseSections.find(s => s.id === id);
-    const data = getSectionData(id);
-    
-    if (base) return { ...base, data };
-    
-    // For custom sections
-    return {
-      id,
-      label: id,
-      tag: 'Special Collection',
-      title: id,
-      data
-    };
-  }).filter(tab => tab.data.length > 0);
+  const visibleTabs = React.useMemo(() => {
+    return activeSectionIds.map(id => {
+      const base = baseSections.find(s => s.id === id);
+      const data = getSectionData(id);
+      
+      if (base) return { ...base, data };
+      
+      // For custom sections
+      return {
+        id,
+        label: id,
+        tag: 'Special Collection',
+        title: id,
+        data
+      };
+    }).filter(tab => tab.data.length > 0);
+  }, [activeSectionIds, getSectionData]);
 
   useEffect(() => {
     if (selectedProduct) {
@@ -493,29 +448,94 @@ export default function Menu() {
     return "https://i.ibb.co/Xx2kxrrg/LOGO-1.png";
   };
 
-  const currentTab = visibleTabs.find(tab => tab.id === activeTab) || visibleTabs[0];
-
   // Combine ALL items from ALL visible tabs for global search
-  const allProducts = visibleTabs.reduce((acc, tab) => {
-    return [...acc, ...(tab.data as Product[])];
-  }, [] as Product[]);
+  const allProducts = React.useMemo(() => {
+    return visibleTabs.reduce((acc, tab) => {
+      return [...acc, ...(tab.data as Product[])];
+    }, [] as Product[]);
+  }, [visibleTabs]);
 
   // Filter logic: If search exists, search ALL products; otherwise use current tab
   const isSearching = searchQuery.trim().length > 0;
-  const sourceData = isSearching ? allProducts : (currentTab.data as Product[]);
+  
+  const currentTab = visibleTabs.find(tab => tab.id === activeTab) || visibleTabs[0];
 
-  // Deduplicate products based on name when searching globally
-  const uniqueSourceData = isSearching 
-    ? Array.from(new Map(sourceData.map(item => [item.nameEn.toLowerCase(), item])).values())
-    : sourceData;
+  // Memoized filtered data to prevent hangs
+  const filteredData = React.useMemo(() => {
+    const query = searchQuery.toLowerCase().trim();
+    let data = isSearching 
+      ? Array.from(new Map(allProducts.map(item => [item.nameEn.toLowerCase(), item])).values())
+      : (currentTab.data as Product[]);
 
-  const filteredData = uniqueSourceData.filter(item => {
-    const query = searchQuery.toLowerCase();
-    return (
-      (item.nameEn || '').toLowerCase().includes(query) || 
-      (item.nameBn || '').toLowerCase().includes(query)
-    );
-  });
+    if (query) {
+      data = data.filter(item => 
+        (item.nameEn || '').toLowerCase().includes(query) || 
+        (item.nameBn || '').toLowerCase().includes(query) ||
+        (item.section && item.section.toLowerCase().includes(query))
+      );
+    }
+
+    if (!isSearching && activeSubTab !== 'All') {
+      const sub = activeSubTab.toLowerCase();
+      data = data.filter(item => {
+        const name = (item.nameEn || '').toLowerCase();
+        const section = (item.section || '').toLowerCase();
+        const category = (item.category || '').toLowerCase();
+        
+        if (sub === 'chocolate cakes') {
+          return name.includes('chocolate') || section.includes('chocolate') || category.includes('chocolate');
+        }
+        if (sub === 'butterscotch cakes') {
+          return name.includes('butterscotch') || section.includes('butterscotch') || category.includes('butterscotch');
+        }
+        if (sub.includes('chocolate') || sub.includes('truffle')) {
+          return name.includes('chocolate') || name.includes('truffle') || section.includes('chocolate') || section.includes('truffle') || category.includes('chocolate');
+        }
+        if (sub.includes('fruit')) {
+          return name.includes('fruit') || name.includes('pineapple') || name.includes('mango') || name.includes('orange') || section.includes('fruit') || category.includes('fruit');
+        }
+        if (sub.includes('butterscotch') || sub.includes('vanilla')) {
+          return name.includes('butterscotch') || name.includes('vanilla') || section.includes('butterscotch') || section.includes('vanilla') || category.includes('butterscotch');
+        }
+        if (sub.includes('strawberry') || sub.includes('red velvet')) {
+          return name.includes('strawberry') || name.includes('red velvet') || name.includes('red-velvet') || section.includes('strawberry') || section.includes('velvet') || category.includes('strawberry');
+        }
+        if (sub.includes('forest') || sub.includes('drinks')) {
+          return name.includes('forest') || name.includes('alcohol') || name.includes('coffee') || name.includes('mocha') || section.includes('forest') || category.includes('forest');
+        }
+        if (sub.includes('sweets lovers') || sub.includes('sweets')) {
+          return name.includes('rasmalai') || name.includes('kitkat') || name.includes('oreo') || name.includes('sweet') || section.includes('sweet') || category.includes('sweet');
+        }
+        if (sub.includes('birthday') || sub.includes('anniversary')) {
+          return name.includes('birthday') || name.includes('anniversary') || section.includes('birthday') || section.includes('anniversary') || category.includes('event') || category.includes('birthday') || category.includes('anniversary');
+        }
+        if (sub.includes('special day')) {
+          return name.includes('teacher') || name.includes('father') || name.includes('mother') || name.includes('baby') || name.includes('rice') || section.includes('special day') || category.includes('special day');
+        }
+        if (sub.includes('christmas')) {
+          return name.includes('christmas') || section.includes('christmas') || category.includes('christmas');
+        }
+        if (sub.includes('bnf special')) {
+          return name.includes('flower') || name.includes('tier') || name.includes('fondant') || name.includes('glitter') || name.includes('theme') || name.includes('combo') || section.includes('bnf') || category.includes('bnf');
+        }
+        if (sub.includes('small dhamaka')) {
+          return name.includes('bento') || name.includes('mousse') || name.includes('jar') || name.includes('glass') || name.includes('cupcake') || name.includes('muffin') || name.includes('tub') || section.includes('dhamaka') || category.includes('dhamaka');
+        }
+        if (sub.includes('cheese')) {
+          return name.includes('cheese') || section.includes('cheese') || category.includes('cheese');
+        }
+        if (sub.includes('pizza') || sub.includes('brownie')) {
+          return name.includes('pizza') || name.includes('brownie') || name.includes('patties') || section.includes('pizza') || section.includes('brownie') || section.includes('patties') || category.includes('snack');
+        }
+        if (sub.includes('kids')) {
+          return name.includes('doll') || name.includes('half') || name.includes('number') || name.includes('kid') || name.includes('photo') || section.includes('kid') || category.includes('kid');
+        }
+        return true;
+      });
+    }
+
+    return data;
+  }, [allProducts, currentTab.data, searchQuery, isSearching, activeSubTab]);
 
   return (
     <section id="menu" className="py-12 md:py-16 bg-transparent transition-colors duration-500 min-h-screen relative">
@@ -580,21 +600,17 @@ export default function Menu() {
             </div>
 
             {/* Category Tabs - Restored and Always On - Now taking full width flow */}
-            <div className="flex flex-nowrap md:flex-wrap justify-start md:justify-center gap-3 md:gap-4 mb-16 overflow-x-auto scrollbar-hide snap-x px-2 pb-4" style={{ WebkitTapHighlightColor: 'transparent' }}>
-              {visibleTabs.map((tab, idx) => {
+            <div className="flex flex-nowrap md:flex-wrap justify-start md:justify-center gap-3 md:gap-4 mb-6 overflow-x-auto scrollbar-hide snap-x px-2 pb-4" style={{ WebkitTapHighlightColor: 'transparent' }}>
+              {visibleTabs.map((tab) => {
                 const isActive = !isSearching && activeTab === tab.id;
 
                 return (
                   <motion.button
                     whileTap={{ scale: 0.94 }}
                     key={tab.id}
-                    onClick={() => {
-                      playSound('pop');
-                      setActiveTab(tab.id as any);
-                      setSearchQuery('');
-                    }}
+                    onClick={() => handleTabChange(tab.id)}
                     className={cn(
-                      "relative flex-shrink-0 snap-center flex items-center gap-2 md:gap-3 px-5 md:px-6 py-2.5 md:py-3 rounded-2xl transition-all duration-300 font-bold text-[10px] md:text-sm tracking-widest uppercase mb-2",
+                      "relative flex-shrink-0 snap-center flex items-center gap-2 md:gap-3 px-5 md:px-6 py-2.5 md:py-3 rounded-2xl transition-all duration-300 font-bold text-[10px] md:text-sm tracking-widest uppercase",
                       isActive 
                         ? "bg-pink-600 text-white shadow-lg shadow-pink-500/30 scale-105" 
                         : "bg-white dark:bg-white/5 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/10"
@@ -619,6 +635,29 @@ export default function Menu() {
                 );
               })}
             </div>
+
+            {/* Sub-tabs for the active main tab */}
+            {!isSearching && subTabsMap[activeTab] && (
+              <div className="flex flex-nowrap justify-start md:justify-center gap-2 mb-4 overflow-x-auto scrollbar-hide snap-x px-2 pb-2">
+                {subTabsMap[activeTab].map((sub) => (
+                  <button
+                    key={sub}
+                    onClick={() => {
+                      playSound('pop');
+                      setActiveSubTab(sub);
+                    }}
+                    className={cn(
+                      "flex-shrink-0 snap-center px-4 py-1.5 rounded-xl text-[9px] md:text-xs font-black transition-all border",
+                      activeSubTab === sub
+                        ? "bg-amber-500 text-white border-amber-400 shadow-md scale-105"
+                        : "bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-white/10 hover:bg-slate-200 dark:hover:bg-white/10"
+                    )}
+                  >
+                    {sub}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -632,42 +671,52 @@ export default function Menu() {
             </p>
         </div>
 
-        {/* Grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-8 mb-16 px-1 md:px-0">
-          <AnimatePresence mode="popLayout" initial={false}>
-            {loading ? (
-              // Skeleton Grid
-              Array.from({ length: 8 }).map((_, i) => (
-                <motion.div
-                  key={`skeleton-${i}`}
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.3, delay: i * 0.05 }}
-                >
-                  <ProductSkeleton />
-                </motion.div>
-              ))
-            ) : filteredData.length > 0 ? (
-              filteredData.slice(0, displayLimit).map((item: Product, index) => (
-                <MenuItemCard
-                  key={`${activeTab}-${item.nameEn}-${index}`}
-                  item={item}
-                  index={index}
-                  activeTab={activeTab}
-                  t={t}
-                  toggleWishlist={toggleWishlist}
-                  isWishlisted={isWishlisted}
-                  openQuickAddToCart={openQuickAddToCart}
-                  setSelectedProduct={setSelectedProduct}
-                  getProductImages={getProductImages}
-                />
-              ))
-            ) : (
-              // Search Results Empty State (only if not loading and filteredData is 0)
-              null
-            )}
-          </AnimatePresence>
+        {/* Grid with Loading State */}
+        <div className="relative min-h-[400px]">
+          {loading && (
+            <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/50 dark:bg-black/50 backdrop-blur-sm rounded-3xl">
+              <div className="flex flex-col items-center gap-4">
+                <div className="w-12 h-12 border-4 border-pink-500 border-t-transparent rounded-full animate-spin"></div>
+                <p className="text-pink-600 font-bold animate-pulse text-sm">
+                  {t.lang === 'en' ? 'Loading Deliciousness...' : 'সুস্বাদু খাবার লোড হচ্ছে...'}
+                </p>
+              </div>
+            </div>
+          )}
+          
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-8 mb-16 px-1 md:px-0">
+            <AnimatePresence>
+              {loading ? (
+                // Skeleton Grid while loading initially
+                Array.from({ length: 8 }).map((_, i) => (
+                  <motion.div
+                    key={`skeleton-${i}`}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.3, delay: i * 0.05 }}
+                  >
+                    <ProductSkeleton />
+                  </motion.div>
+                ))
+              ) : filteredData.length > 0 ? (
+                filteredData.slice(0, displayLimit).map((item: Product, index) => (
+                  <MenuItemCard
+                    key={`${activeTab}-${item.nameEn}-${index}`}
+                    item={item}
+                    index={index}
+                    activeTab={activeTab}
+                    t={t}
+                    toggleWishlist={toggleWishlist}
+                    isWishlisted={isWishlisted}
+                    openQuickAddToCart={openQuickAddToCart}
+                    setSelectedProduct={setSelectedProduct}
+                    getProductImages={getProductImages}
+                  />
+                ))
+              ) : null}
+            </AnimatePresence>
+          </div>
         </div>
 
         {/* Load More Observer Target */}
@@ -717,7 +766,7 @@ export default function Menu() {
           <div className="flex justify-center mt-12 pb-24">
             <button
                onClick={() => {
-                 setActiveTab('More');
+                 setActiveTab('More Items');
                  const element = document.getElementById('menu');
                  if (element) {
                    const yOffset = -80;
@@ -800,27 +849,12 @@ export default function Menu() {
                       transition={{ duration: 0.3 }}
                       className="absolute inset-0 w-full h-full flex items-center justify-center bg-pink-100 dark:bg-zinc-800"
                     >
-                      <div className="absolute inset-0 w-full h-full animate-pulse bg-pink-200/50 dark:bg-black/20" />
-                      <img 
-                        src={getOptimizedImageUrl(
-                          (getProductImages(selectedProduct.nameEn)[currentImageIndex]) || selectedProduct.img || "https://i.ibb.co/Xx2kxrrg/LOGO-1.png", 
-                          900, 
-                          85
-                        ) || (getProductImages(selectedProduct.nameEn)[currentImageIndex]) || selectedProduct.img || "https://i.ibb.co/Xx2kxrrg/LOGO-1.png"}
+                      <OptimizedImage 
+                        src={(getProductImages(selectedProduct.nameEn)[currentImageIndex]) || selectedProduct.img || "https://i.ibb.co/Xx2kxrrg/LOGO-1.png"}
                         alt={selectedProduct.nameEn}
                         className="w-full h-full object-cover pointer-events-none relative z-10"
-                        referrerPolicy="no-referrer"
-                        loading="lazy"
-                        decoding="async"
-                        onError={(e) => {
-                          const target = e.currentTarget;
-                          if (!target.dataset.triedOriginal) {
-                            target.dataset.triedOriginal = 'true';
-                            target.src = getProductImages(selectedProduct.nameEn)[currentImageIndex] || selectedProduct.img || "https://i.ibb.co/Xx2kxrrg/LOGO-1.png";
-                          } else {
-                            target.src = "https://i.ibb.co/Xx2kxrrg/LOGO-1.png";
-                          }
-                        }}
+                        width={900}
+                        quality={85}
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent pointer-events-none z-20" />
                     </motion.div>
