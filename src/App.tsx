@@ -19,6 +19,7 @@ import { requestNotificationPermission, sendOrderPushNotification, isNotificatio
 import { useAnalyticsTracker } from './hooks/useAnalyticsTracker';
 import { OptimizedImage } from './components/OptimizedImage';
 import { VideoSkeleton } from './components/common/Skeleton';
+import { BrandIcons } from './components/BrandIcons';
 import { WEATHER_THEMES, fetchCurrentWeather } from './utils/weatherTheme';
 import { flavours, gifts, moreOptionsData } from './constants/data';
 import { Play, Youtube, Facebook, X, Heart, Star, Snowflake, Gift, Video, Pin, ArrowUp, Sun, Moon, Keyboard, RefreshCw, CheckCircle2, ShoppingCart, ShoppingBag, User as UserIcon, Clock, Shield, MessageCircle } from 'lucide-react';
@@ -287,9 +288,9 @@ const VideoFrame = ({ type, video, index, t }: { type: 'youtube' | 'facebook', v
              </motion.div>
           </div>
 
-          <div className="absolute top-4 left-4 md:top-6 md:left-6 flex items-center gap-2 p-1 bg-black/40 backdrop-blur-xl border border-white/20 rounded-2xl shadow-lg z-30">
-             <div className={cn("p-2 rounded-xl flex items-center gap-2 transition-all", type === 'youtube' ? "bg-rose-600 shadow-[0_0_15px_rgba(225,29,72,0.4)]" : "bg-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.4)]")}>
-                {type === 'youtube' ? <Youtube size={14} className="text-white" /> : <Facebook size={14} className="text-white" />}
+          <div className="absolute top-4 left-4 md:top-6 md:left-6 flex items-center gap-2 p-1.5 bg-black/60 backdrop-blur-xl border border-white/20 rounded-2xl shadow-lg z-30">
+             <div className={cn("p-1.5 rounded-xl flex items-center gap-2 transition-all", type === 'youtube' ? "bg-rose-600 shadow-[0_0_15px_rgba(225,29,72,0.4)]" : "bg-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.4)]")}>
+                {type === 'youtube' ? <BrandIcons.YouTube size={18} /> : <BrandIcons.Facebook size={18} />}
                 <span className="text-[9px] font-black text-white uppercase tracking-[0.2em]">
                    {type === 'youtube' ? 'YouTube' : 'Tutorials'}
                 </span>

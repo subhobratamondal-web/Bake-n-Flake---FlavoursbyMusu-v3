@@ -3,6 +3,7 @@ import { Heart, MapPin, Phone, Mail, Navigation, Users, Plus, Facebook, Instagra
 import { motion, AnimatePresence } from 'motion/react';
 import { AppContext } from '../App';
 import { cn } from '../lib/utils';
+import { BrandIcons } from './BrandIcons';
 
 export default function Footer() {
   const { t, galleryData, serverDate, lastSyncedTime, syncStatus, handleForceRefresh, setIsWishlistOpen, wishlist, lang } = useContext(AppContext);
@@ -128,26 +129,26 @@ export default function Footer() {
                    className="overflow-hidden"
                  >
                    <div className="flex flex-wrap justify-center gap-4 mt-2 pb-8">
-                      <a href="https://www.facebook.com/flavoursbymusu/" target="_blank" rel="noreferrer" className="w-12 h-12 bg-white/50 dark:bg-black/20 rounded-2xl flex items-center justify-center text-blue-600 hover:scale-110 transition-all shadow-lg border border-white/40 dark:border-white/5">
-                         <Facebook size={20} />
+                      <a href="https://www.facebook.com/flavoursbymusu/" target="_blank" rel="noreferrer" className="w-12 h-12 bg-white/50 dark:bg-black/20 rounded-2xl flex items-center justify-center hover:scale-110 transition-all shadow-lg border border-white/40 dark:border-white/5">
+                         <BrandIcons.Facebook size={28} />
                       </a>
-                      <a href="#" className="w-12 h-12 bg-white/50 dark:bg-black/20 rounded-2xl flex items-center justify-center text-purple-600 hover:scale-110 transition-all shadow-lg border border-white/40 dark:border-white/5">
-                         <Users size={20} />
+                      <a href="https://www.facebook.com/musu.khan99/" target="_blank" rel="noreferrer" className="w-12 h-12 bg-white/50 dark:bg-black/20 rounded-2xl flex items-center justify-center hover:scale-110 transition-all shadow-lg border border-white/40 dark:border-white/5">
+                         <BrandIcons.Owner size={28} />
                       </a>
-                      <a href="https://instagram.com/flavoursbymusu" target="_blank" rel="noreferrer" className="w-12 h-12 bg-white/50 dark:bg-black/20 rounded-2xl flex items-center justify-center text-pink-600 hover:scale-110 transition-all shadow-lg border border-white/40 dark:border-white/5">
-                         <Instagram size={20} />
+                      <a href="https://instagram.com/flavoursbymusu" target="_blank" rel="noreferrer" className="w-12 h-12 bg-white/50 dark:bg-black/20 rounded-2xl flex items-center justify-center hover:scale-110 transition-all shadow-lg border border-white/40 dark:border-white/5">
+                         <BrandIcons.Instagram size={28} />
                       </a>
-                      <a href="https://in.pinterest.com/khanmegha99/" target="_blank" rel="noreferrer" className="w-12 h-12 bg-white/50 dark:bg-black/20 rounded-2xl flex items-center justify-center text-red-600 hover:scale-110 transition-all shadow-lg border border-white/40 dark:border-white/5">
-                         <Pin size={20} />
+                      <a href="https://in.pinterest.com/khanmegha99/" target="_blank" rel="noreferrer" className="w-12 h-12 bg-white/50 dark:bg-black/20 rounded-2xl flex items-center justify-center hover:scale-110 transition-all shadow-lg border border-white/40 dark:border-white/5">
+                         <BrandIcons.Pinterest size={28} />
                       </a>
-                      <a href="https://youtube.com/@MuskanKhan-pk3qt" target="_blank" rel="noreferrer" className="w-12 h-12 bg-white/50 dark:bg-black/20 rounded-2xl flex items-center justify-center text-red-600 hover:scale-110 transition-all shadow-lg border border-white/40 dark:border-white/5">
-                         <Youtube size={20} />
+                      <a href="https://youtube.com/@MuskanKhan-pk3qt" target="_blank" rel="noreferrer" className="w-12 h-12 bg-white/50 dark:bg-black/20 rounded-2xl flex items-center justify-center hover:scale-110 transition-all shadow-lg border border-white/40 dark:border-white/5">
+                         <BrandIcons.YouTube size={28} />
                       </a>
-                      <a href="mailto:subhobratamondal@gmail.com" className="w-12 h-12 bg-white/50 dark:bg-black/20 rounded-2xl flex items-center justify-center text-orange-500 hover:scale-110 transition-all shadow-lg border border-white/40 dark:border-white/5">
-                         <Mail size={20} />
+                      <a href="mailto:subhobratamondal@gmail.com" className="w-12 h-12 bg-white/50 dark:bg-black/20 rounded-2xl flex items-center justify-center hover:scale-110 transition-all shadow-lg border border-white/40 dark:border-white/5">
+                         <BrandIcons.Email size={28} />
                       </a>
-                      <a href="https://wa.me/919875563329" target="_blank" rel="noreferrer" className="w-12 h-12 bg-white/50 dark:bg-black/20 rounded-2xl flex items-center justify-center text-emerald-500 hover:scale-110 transition-all shadow-lg border border-white/40 dark:border-white/5">
-                         <Phone size={20} />
+                      <a href="https://wa.me/919875563329" target="_blank" rel="noreferrer" className="w-12 h-12 bg-white/50 dark:bg-black/20 rounded-2xl flex items-center justify-center hover:scale-110 transition-all shadow-lg border border-white/40 dark:border-white/5">
+                         <BrandIcons.WhatsApp size={28} />
                       </a>
                    </div>
                  </motion.div>

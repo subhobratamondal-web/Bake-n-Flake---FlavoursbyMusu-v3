@@ -1,9 +1,10 @@
-import React, { useContext, useState, useMemo } from 'react';
+import React, { useContext, useState, useMemo, useEffect } from 'react';
 import { Star, Filter, Quote, Globe, Facebook, MessageSquare, ThumbsUp, CornerDownRight, CheckCircle2, Layout, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AppContext } from '../App';
 import { googleReviewsData, facebookReviewsData, webReviewsData } from '../constants/data';
 import { cn } from '../lib/utils';
+import { BrandIcons } from './BrandIcons';
 
 const GOOGLE_REVIEW_LINK = "https://g.page/r/CRgnjQFjh1wREBM/review";
 const FACEBOOK_REVIEW_LINK = "https://www.facebook.com/flavoursbymusu/reviews";
@@ -86,6 +87,21 @@ export default function Reviews() {
   const [replyingReview, setReplyingReview] = useState<any | null>(null);
   const [replyText, setReplyText] = useState('');
   const [isSubmittingReply, setIsSubmittingReply] = useState(false);
+
+  // Auto-switch review source tab every 1 minute (60,000ms)
+  useEffect(() => {
+    const sources: Array<'google' | 'facebook' | 'web'> = ['google', 'facebook', 'web'];
+    const timer = setInterval(() => {
+      setSource(prev => {
+        const currentIndex = sources.indexOf(prev);
+        const nextIndex = (currentIndex + 1) % sources.length;
+        setSelectedTopic('all');
+        return sources[nextIndex];
+      });
+    }, 60000); // 1 minute interval
+
+    return () => clearInterval(timer);
+  }, [source]);
 
   const rawReviews = useMemo(() => {
     // Filter dynamic reviews by source
@@ -288,10 +304,8 @@ export default function Reviews() {
         {/* Global Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto mb-16">
           <div className="bg-white dark:bg-white/5 backdrop-blur-md rounded-3xl p-8 flex flex-col items-center justify-center text-center shadow-[0_20px_40px_rgba(0,0,0,0.05)] border border-slate-100 dark:border-white/10 hover:-translate-y-2 transition-transform duration-300">
-            <a href={GOOGLE_REVIEW_LINK} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 bg-[#EA4335] text-white px-6 py-2.5 rounded-full font-bold text-xs uppercase tracking-widest hover:shadow-lg hover:shadow-[#EA4335]/30 transition-all mb-6">
-              <div className="w-5 h-5 bg-white rounded-full flex items-center justify-center shrink-0">
-                 <img src="https://www.google.com/images/branding/googleg/1x/googleg_standard_color_128dp.png" alt="Google" className="w-3 h-3 object-contain" />
-              </div>
+            <a href={GOOGLE_REVIEW_LINK} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2.5 bg-[#EA4335] text-white px-6 py-2.5 rounded-full font-bold text-xs uppercase tracking-widest hover:shadow-lg hover:shadow-[#EA4335]/30 transition-all mb-6">
+              <BrandIcons.Google size={24} />
               Review us on Google
             </a>
             <div className="text-4xl md:text-5xl font-black text-slate-900 dark:text-white mb-2">4.9 on Google</div>
@@ -306,8 +320,8 @@ export default function Reviews() {
           </div>
 
           <div className="bg-white dark:bg-white/5 backdrop-blur-md rounded-3xl p-8 flex flex-col items-center justify-center text-center shadow-[0_20px_40px_rgba(0,0,0,0.05)] border border-slate-100 dark:border-white/10 hover:-translate-y-2 transition-transform duration-300">
-            <a href={FACEBOOK_REVIEW_LINK} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 bg-[#1877F2] text-white px-6 py-2.5 rounded-full font-bold text-xs uppercase tracking-widest hover:shadow-lg hover:shadow-[#1877F2]/30 transition-all mb-6">
-              <Facebook size={16} fill="currentColor" />
+            <a href={FACEBOOK_REVIEW_LINK} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2.5 bg-[#1877F2] text-white px-6 py-2.5 rounded-full font-bold text-xs uppercase tracking-widest hover:shadow-lg hover:shadow-[#1877F2]/30 transition-all mb-6">
+              <BrandIcons.Facebook size={24} />
               Review us on Facebook
             </a>
             <div className="text-4xl md:text-5xl font-black text-slate-900 dark:text-white mb-2">100% on Facebook</div>
@@ -335,9 +349,7 @@ export default function Reviews() {
                   : "text-slate-600 dark:text-slate-400 hover:bg-white/50"
               )}
             >
-              <div className="flex items-center justify-center w-6 h-6 bg-white rounded-lg shadow-sm shrink-0">
-                 <img src="https://www.google.com/images/branding/googleg/1x/googleg_standard_color_128dp.png" alt="Google" className="w-3.5 h-3.5 object-contain" />
-              </div>
+              <BrandIcons.Google size={22} />
               <span>GOOGLE</span>
             </button>
             <button
@@ -349,9 +361,7 @@ export default function Reviews() {
                   : "text-slate-600 dark:text-slate-400 hover:bg-white/50"
               )}
             >
-              <div className="flex items-center justify-center w-6 h-6 bg-white rounded-lg shadow-sm shrink-0">
-                 <Facebook size={14} className="text-[#1877F2]" fill="currentColor" />
-              </div>
+              <BrandIcons.Facebook size={22} />
               <span>FACEBOOK</span>
             </button>
             <button
@@ -370,16 +380,24 @@ export default function Reviews() {
             </button>
           </div>
 
-          <div className="p-4 sm:p-8 md:p-12">
-            {/* Dynamic Review Summary Bar */}
-            <ReviewSummaryChart 
-              source={source}
-              rating={stats.rating}
-              totalReviews={source === 'google' ? (t.lang === 'en' ? `${stats.total}+ Google Reviews` : `${stats.total}+ গুগল রিভিউ`) : (source === 'facebook' ? (t.lang === 'en' ? `${stats.total}+ Recommendations` : `${stats.total}+ রেকমেন্ডেশন`) : (t.lang === 'en' ? `${stats.total}+ Web Reviews` : `${stats.total}+ ওয়েব রিভিউ`))}
-              lang={t.lang}
-              titleEn={source === 'google' ? 'Google review summary' : (source === 'facebook' ? 'Facebook review summary' : 'Web review summary')}
-              titleBn={source === 'google' ? 'গুগল রিভিউ সারসংক্ষেপ' : (source === 'facebook' ? 'ফেসবুক রিভিউ সারসংক্ষেপ' : 'ওয়েব রিভিউ সারসংক্ষেপ')}
-            />
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={source}
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12 }}
+              transition={{ duration: 0.35, ease: "easeOut" }}
+              className="p-4 sm:p-8 md:p-12"
+            >
+              {/* Dynamic Review Summary Bar */}
+              <ReviewSummaryChart 
+                source={source}
+                rating={stats.rating}
+                totalReviews={source === 'google' ? (t.lang === 'en' ? `${stats.total}+ Google Reviews` : `${stats.total}+ গুগল রিভিউ`) : (source === 'facebook' ? (t.lang === 'en' ? `${stats.total}+ Recommendations` : `${stats.total}+ রেকমেন্ডেশন`) : (t.lang === 'en' ? `${stats.total}+ Web Reviews` : `${stats.total}+ ওয়েব রিভিউ`))}
+                lang={t.lang}
+                titleEn={source === 'google' ? 'Google review summary' : (source === 'facebook' ? 'Facebook review summary' : 'Web review summary')}
+                titleBn={source === 'google' ? 'গুগল রিভিউ সারসংক্ষেপ' : (source === 'facebook' ? 'ফেসবুক রিভিউ সারসংক্ষেপ' : 'ওয়েব রিভিউ সারসংক্ষেপ')}
+              />
 
             {source === 'web' && (
               <div className="flex justify-center mb-10">
@@ -441,17 +459,14 @@ export default function Reviews() {
 
             {/* Review Cards Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <AnimatePresence mode="popLayout">
-                {reviews.map((review, i) => (
-                  <motion.div 
-                    key={review.nameEn + i}
-                    layout
-                    initial={{ opacity: 0, y: 15 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                    transition={{ duration: 0.25, delay: i * 0.05 }}
-                    className="p-6 rounded-[2.5rem] bg-white dark:bg-white/5 border border-slate-200/60 dark:border-white/10 hover:border-pink-300/60 transition-all flex flex-col group h-full shadow-lg"
-                  >
+              {reviews.map((review, i) => (
+                <motion.div 
+                  key={review.nameEn + i}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, delay: Math.min(i * 0.04, 0.2) }}
+                  className="p-6 rounded-[2.5rem] bg-white dark:bg-white/5 border border-slate-200/60 dark:border-white/10 hover:border-pink-300/60 transition-all flex flex-col group h-full shadow-lg"
+                >
                     <div className="flex items-start justify-between gap-4 mb-4">
                       <div className="flex items-center gap-3">
                         <div className="relative shrink-0">
@@ -562,7 +577,6 @@ export default function Reviews() {
                     </div>
                   </motion.div>
                 ))}
-              </AnimatePresence>
             </div>
             
             {/* Action Buttons */}
@@ -585,7 +599,8 @@ export default function Reviews() {
               </a>
             </div>
 
-          </div>
+            </motion.div>
+          </AnimatePresence>
         </div>
       </div>
 

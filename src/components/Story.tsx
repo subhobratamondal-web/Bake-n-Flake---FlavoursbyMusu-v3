@@ -24,75 +24,78 @@ export default function Story() {
   return (
     <section id="story" className="py-24 bg-transparent relative transition-colors duration-500 overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-        <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
+        <div className="flex flex-col lg:grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
+          {/* Slider Container - Order 2 on mobile (below text), Order 1 on desktop (left column shifted down and aligned) */}
           <motion.div
             initial={{ opacity: 0, x: -50 }}
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true }}
-            className="relative"
+            className="order-2 lg:order-1 relative w-full flex flex-col items-center justify-center lg:mt-12"
           >
-              {/* Horizontal Ping-Pong Sliding Carousel Frame */}
-              <div className="w-full h-[360px] sm:h-[440px] md:h-[520px] lg:h-[580px] rounded-[2.5rem] md:rounded-[3.5rem] overflow-hidden shadow-[0_30px_70px_rgba(0,0,0,0.35)] relative z-10 border-4 border-pink-500/20 dark:border-white/10 bg-slate-900/40 neon-border-pink">
-                <style>{`
-                  @keyframes storyPingPongGpu {
-                    0% { transform: translate3d(0%, 0, 0); }
-                    50% { transform: translate3d(${maxTranslatePercent}%, 0, 0); }
-                    100% { transform: translate3d(0%, 0, 0); }
-                  }
-                  .story-gpu-slider {
-                    animation: storyPingPongGpu ${Math.max(16, totalImages * 7)}s ease-in-out infinite;
-                    will-change: transform;
-                    backface-visibility: hidden;
-                    -webkit-backface-visibility: hidden;
-                    transform: translateZ(0);
-                    -webkit-transform: translateZ(0);
-                  }
-                `}</style>
-                <div
-                  className="flex h-full story-gpu-slider"
-                  style={{ width: `${totalImages * 100}%` }}
-                >
-                  {storyImages.map((src, idx) => (
-                    <div 
-                      key={idx} 
-                      className="h-full relative overflow-hidden shrink-0" 
-                      style={{ width: `${100 / totalImages}%` }}
-                    >
-                      <OptimizedImage 
-                        src={src}
-                        alt={`Our Story ${idx + 1}`} 
-                        width={1000}
-                        quality={85}
-                        fallbackSrc="https://i.ibb.co/XkYN11bL/PROFILE.jpg"
-                        className="w-full h-full object-cover select-none"
-                      />
-                    </div>
-                  ))}
+              <div className="relative w-full max-w-[380px] sm:max-w-[420px] md:max-w-[460px] lg:max-w-[500px] aspect-[15/17]">
+                {/* Horizontal Ping-Pong Sliding Carousel Frame */}
+                <div className="w-full h-full rounded-[2.5rem] md:rounded-[3.5rem] overflow-hidden shadow-[0_30px_70px_rgba(0,0,0,0.35)] relative z-10 border-4 border-pink-500/20 dark:border-white/10 bg-slate-900/40 neon-border-pink">
+                  <style>{`
+                    @keyframes storyPingPongGpu {
+                      0% { transform: translate3d(0%, 0, 0); }
+                      50% { transform: translate3d(${maxTranslatePercent}%, 0, 0); }
+                      100% { transform: translate3d(0%, 0, 0); }
+                    }
+                    .story-gpu-slider {
+                      animation: storyPingPongGpu ${Math.max(16, totalImages * 7)}s ease-in-out infinite;
+                      will-change: transform;
+                      backface-visibility: hidden;
+                      -webkit-backface-visibility: hidden;
+                      transform: translateZ(0);
+                      -webkit-transform: translateZ(0);
+                    }
+                  `}</style>
+                  <div
+                    className="flex h-full story-gpu-slider"
+                    style={{ width: `${totalImages * 100}%` }}
+                  >
+                    {storyImages.map((src, idx) => (
+                      <div 
+                        key={idx} 
+                        className="h-full relative overflow-hidden shrink-0" 
+                        style={{ width: `${100 / totalImages}%` }}
+                      >
+                        <OptimizedImage 
+                          src={src}
+                          alt={`Our Story ${idx + 1}`} 
+                          width={1000}
+                          quality={85}
+                          fallbackSrc="https://i.ibb.co/XkYN11bL/PROFILE.jpg"
+                          className="w-full h-full object-cover select-none"
+                        />
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
 
-             {/* OWNER Floating Accent for Story Slider */}
-             <motion.a 
-               href="https://www.facebook.com/musu.khan99/"
-               target="_blank"
-               rel="noreferrer"
-               initial={{ opacity: 0, x: -20 }}
-               whileInView={{ opacity: 1, x: 0 }}
-               viewport={{ once: true }}
-               className="absolute bottom-4 -right-4 md:bottom-8 md:-right-12 z-30 p-3 md:p-4 rounded-[1.5rem] md:rounded-[2rem] glow-tag-pink flex items-center gap-3 md:gap-4 min-w-[120px] md:min-w-[170px] hover:scale-105 transition-transform"
-             >
-               <div className="w-8 h-8 md:w-11 md:h-11 rounded-[0.8rem] md:rounded-[1.2rem] overflow-hidden border-2 border-white/40 shadow-lg shrink-0">
-                 <img src="https://i.ibb.co/wrc3VVRg/PROFILE.jpg" alt="Musu" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-               </div>
-               <div className="flex flex-col">
-                  <span className="text-white font-black text-[8px] md:text-sm uppercase leading-none tracking-widest">OWNER</span>
-                  <span className="text-white/80 text-[8px] md:text-xs font-bold mt-0.5 md:mt-1 uppercase tracking-widest leading-none">~ Musu</span>
-               </div>
-             </motion.a>
-             
-             {/* Decorative Background Blob */}
-             <div className="absolute -bottom-20 -left-20 w-80 h-80 bg-pink-400/20 dark:bg-pink-900/10 rounded-full blur-[100px] -z-0 animate-blob" />
-             <div className="absolute top-0 -right-10 w-40 h-40 bg-rose-400/20 dark:bg-rose-900/10 rounded-full blur-[60px] -z-0 animate-blob" style={{ animationDelay: '2s' }} />
+                {/* OWNER Floating Accent for Story Slider */}
+                <motion.a 
+                  href="https://www.facebook.com/musu.khan99/"
+                  target="_blank"
+                  rel="noreferrer"
+                  initial={{ opacity: 0, x: -20 }}
+                  whileInView={{ opacity: 1, x: 0 }}
+                  viewport={{ once: true }}
+                  className="absolute bottom-4 -right-4 md:bottom-8 md:-right-8 z-30 p-3 md:p-4 rounded-[1.5rem] md:rounded-[2rem] glow-tag-pink flex items-center gap-3 md:gap-4 min-w-[120px] md:min-w-[170px] hover:scale-105 transition-transform"
+                >
+                  <div className="w-8 h-8 md:w-11 md:h-11 rounded-[0.8rem] md:rounded-[1.2rem] overflow-hidden border-2 border-white/40 shadow-lg shrink-0">
+                    <img src="https://i.ibb.co/wrc3VVRg/PROFILE.jpg" alt="Musu" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  </div>
+                  <div className="flex flex-col">
+                     <span className="text-white font-black text-[8px] md:text-sm uppercase leading-none tracking-widest">OWNER</span>
+                     <span className="text-white/80 text-[8px] md:text-xs font-bold mt-0.5 md:mt-1 uppercase tracking-widest leading-none">~ Musu</span>
+                  </div>
+                </motion.a>
+              </div>
+              
+              {/* Decorative Background Blob */}
+              <div className="absolute -bottom-20 -left-20 w-80 h-80 bg-pink-400/20 dark:bg-pink-900/10 rounded-full blur-[100px] -z-0 animate-blob" />
+              <div className="absolute top-0 -right-10 w-40 h-40 bg-rose-400/20 dark:bg-rose-900/10 rounded-full blur-[60px] -z-0 animate-blob" style={{ animationDelay: '2s' }} />
           </motion.div>
 
           <motion.div
@@ -100,6 +103,7 @@ export default function Story() {
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.8 }}
+            className="order-1 lg:order-2 w-full"
           >
             <div className="flex justify-center lg:justify-start mb-6">
               <div className="inline-flex items-center justify-center gap-3 p-4 rounded-2xl bg-white dark:bg-white/5 shadow-2xl shadow-pink-500/10 border border-pink-100 dark:border-white/10 group">

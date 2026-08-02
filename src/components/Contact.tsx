@@ -15,13 +15,13 @@ export default function Contact() {
     : null) || "https://i.ibb.co/XkYN11bL/PROFILE.jpg");
 
   const socialLinks = [
-    { icon: Heart, isBrand: false, label: 'OWNER', className: 'owner-neon-btn', href: 'https://www.facebook.com/musu.khan99/', color: 'text-pink-500' },
+    { icon: BrandIcons.Owner, isBrand: true, label: 'OWNER', className: 'owner-neon-btn', href: 'https://www.facebook.com/musu.khan99/', color: '' },
     { icon: BrandIcons.Facebook, isBrand: true, label: 'FACEBOOK', className: 'fb-neon-btn', href: 'https://www.facebook.com/flavoursbymusu/', color: '' },
     { icon: BrandIcons.Instagram, isBrand: true, label: 'INSTAGRAM', className: 'insta-neon-btn', href: 'https://instagram.com/flavoursbymusu', color: '' },
-    { icon: Pin, isBrand: false, label: 'PINTEREST', className: 'pinterest-neon-btn', href: 'https://in.pinterest.com/khanmegha99/', color: 'text-red-600' },
+    { icon: BrandIcons.Pinterest, isBrand: true, label: 'PINTEREST', className: 'pinterest-neon-btn', href: 'https://in.pinterest.com/khanmegha99/', color: '' },
     { icon: BrandIcons.YouTube, isBrand: true, label: 'YOUTUBE', className: 'yt-neon-btn', href: 'https://youtube.com/@MuskanKhan-pk3qt', color: '' },
-    { icon: Mail, isBrand: false, label: 'EMAIL', className: 'email-neon-btn', href: 'mailto:subhobratamondal@gmail.com', color: 'text-orange-500' },
-    { icon: Phone, isBrand: false, label: 'CALL', className: 'call-neon-btn', href: 'tel:+919875563329', color: 'text-emerald-500' },
+    { icon: BrandIcons.Email, isBrand: true, label: 'EMAIL', className: 'email-neon-btn', href: 'mailto:subhobratamondal@gmail.com', color: '' },
+    { icon: BrandIcons.Call, isBrand: true, label: 'CALL', className: 'call-neon-btn', href: 'tel:+919875563329', color: '' },
   ];
 
   return (
@@ -109,7 +109,7 @@ export default function Contact() {
                       )}
                     >
                       <div className={cn("w-12 h-12 md:w-14 md:h-14 flex items-center justify-center transition-all duration-300 group-hover:scale-110", social.color)}>
-                         {social.isBrand ? <Icon /> : <Icon size={32} className="stroke-[1.5]" />}
+                         {social.isBrand ? <Icon size={44} /> : <Icon size={32} className="stroke-[1.5]" />}
                       </div>
                       <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 tracking-[0.2em] uppercase group-hover:text-slate-800 dark:group-hover:text-white transition-colors">{social.label}</span>
                     </motion.a>
@@ -136,7 +136,7 @@ export default function Contact() {
                       )}
                     >
                       <div className={cn("w-12 h-12 md:w-14 md:h-14 flex items-center justify-center transition-all duration-300 group-hover:scale-110", social.color)}>
-                         {social.isBrand ? <Icon /> : <Icon size={32} className="stroke-[1.5]" />}
+                         {social.isBrand ? <Icon size={44} /> : <Icon size={32} className="stroke-[1.5]" />}
                       </div>
                       <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 tracking-[0.2em] uppercase group-hover:text-slate-800 dark:group-hover:text-white transition-colors">{social.label}</span>
                     </motion.a>
