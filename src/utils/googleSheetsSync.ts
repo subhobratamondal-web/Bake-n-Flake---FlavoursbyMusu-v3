@@ -338,13 +338,19 @@ export async function fetchGalleryDataDirectFromSheets(): Promise<GalleryData | 
       }
     }
 
-    if (result.items && !result.items.some(it => it.nameEn && it.nameEn.toLowerCase() === 'chocolate cakes')) {
-      result.items.unshift({
-        nameEn: "Chocolate Cakes",
-        nameBn: "চকলেট কেক",
-        section: "Signature Menu",
-        img: "https://i.ibb.co/S4MNP7Vf/Chocolate-Cakes.png"
-      });
+    if (result.items && result.items.length > 0) {
+      const chocIdx = result.items.findIndex(it => it.nameEn && it.nameEn.toLowerCase().trim() === 'chocolate cakes');
+      if (chocIdx > 0) {
+        const [choc] = result.items.splice(chocIdx, 1);
+        result.items.unshift(choc);
+      } else if (chocIdx === -1) {
+        result.items.unshift({
+          nameEn: "Chocolate Cakes",
+          nameBn: "চকলেট কেক",
+          section: "Signature Menu",
+          img: "https://i.ibb.co/S4MNP7Vf/Chocolate-Cakes.png"
+        });
+      }
     }
 
     return result;

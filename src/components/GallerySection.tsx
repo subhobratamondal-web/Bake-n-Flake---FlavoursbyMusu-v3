@@ -231,6 +231,17 @@ export default function GallerySection() {
         });
     });
 
+    if (targetCategory === 'Signature' && finalItems.length > 0) {
+      const chocIndex = finalItems.findIndex(it => 
+        String(it.nameEn || '').toLowerCase().trim() === 'chocolate cakes' || 
+        String(it.nameBn || '').trim() === 'চকলেট কেক'
+      );
+      if (chocIndex > 0) {
+        const [choc] = finalItems.splice(chocIndex, 1);
+        finalItems.unshift(choc);
+      }
+    }
+
     return finalItems;
   }, [activeTab, galleryData]);
 

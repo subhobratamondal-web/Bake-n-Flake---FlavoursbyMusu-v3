@@ -740,13 +740,19 @@ function rebuildGallery() {
     });
   }
 
-  if (newGallery.items && !newGallery.items.some((it: any) => it.nameEn && it.nameEn.toLowerCase() === 'chocolate cakes')) {
-    newGallery.items.unshift({
-      nameEn: "Chocolate Cakes",
-      nameBn: "চকলেট কেক",
-      section: "Signature Menu",
-      img: "https://i.ibb.co/S4MNP7Vf/Chocolate-Cakes.png"
-    });
+  if (newGallery.items && newGallery.items.length > 0) {
+    const chocIdx = newGallery.items.findIndex((it: any) => it.nameEn && it.nameEn.toLowerCase().trim() === 'chocolate cakes');
+    if (chocIdx > 0) {
+      const [choc] = newGallery.items.splice(chocIdx, 1);
+      newGallery.items.unshift(choc);
+    } else if (chocIdx === -1) {
+      newGallery.items.unshift({
+        nameEn: "Chocolate Cakes",
+        nameBn: "চকলেট কেক",
+        section: "Signature Menu",
+        img: "https://i.ibb.co/S4MNP7Vf/Chocolate-Cakes.png"
+      });
+    }
   }
 
   // 3. Map all cached sheets to the gallery

@@ -317,7 +317,18 @@ export default function Menu() {
   const activeSectionIds = React.useMemo(() => ['Signature', 'Gifting', 'More Items'], []);
 
   const getSectionData = React.useCallback((sectionId: string) => {
-    return dynamicItems.filter(it => mapSection(it.section) === sectionId);
+    let items = dynamicItems.filter(it => mapSection(it.section) === sectionId);
+    if (sectionId === 'Signature' && items.length > 0) {
+      const chocIndex = items.findIndex(it => 
+        String(it.nameEn || '').toLowerCase().trim() === 'chocolate cakes' || 
+        String(it.nameBn || '').trim() === 'চকলেট কেক'
+      );
+      if (chocIndex > 0) {
+        const [choc] = items.splice(chocIndex, 1);
+        items.unshift(choc);
+      }
+    }
+    return items;
   }, [dynamicItems]);
 
   const visibleTabs = React.useMemo(() => {

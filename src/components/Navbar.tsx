@@ -372,6 +372,38 @@ export default function Navbar() {
                     <ChevronRight size={16} className="text-pink-500" />
                   </button>
 
+                  {/* 2. Cart / Add to Cart Option (Right after Login Tab) */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCartOpen(true);
+                      setMobileMenuOpen(false);
+                    }}
+                    className="flex items-center justify-between w-full p-3 rounded-2xl bg-slate-50 dark:bg-white/5 border border-slate-200/80 dark:border-white/10 hover:bg-slate-100 dark:hover:bg-white/10 text-slate-800 dark:text-white font-bold text-xs transition-all touch-manipulation cursor-pointer"
+                    style={{ touchAction: 'manipulation' }}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-xl bg-pink-500/20 text-pink-600 dark:text-pink-400 flex items-center justify-center font-bold text-xs shrink-0">
+                        <ShoppingBag size={16} />
+                      </div>
+                      <div className="flex flex-col text-left">
+                        <span className="font-bold text-xs">
+                          {lang === 'en' ? 'Cart / Added Items' : 'কার্ট (শপিং ব্যাগ)'}
+                        </span>
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 font-normal">
+                          {lang === 'en' ? 'View cart & checkout' : 'কার্টের প্রোডাক্টস দেখুন'}
+                        </span>
+                      </div>
+                    </div>
+                    {cart.length > 0 ? (
+                      <span className="px-2 py-0.5 rounded-full bg-pink-600 text-white font-black text-[10px]">
+                        {cart.reduce((sum, item) => sum + item.quantity, 0)}
+                      </span>
+                    ) : (
+                      <ChevronRight size={16} className="text-slate-400" />
+                    )}
+                  </button>
+
                   {/* 2. Order History Option */}
                   <button
                     type="button"

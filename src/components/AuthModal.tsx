@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, User, Phone, Mail, MapPin, CheckCircle, ShieldCheck, LogOut, Crown, ShoppingBag, Sparkles } from 'lucide-react';
+import { X, User, Phone, Mail, MapPin, CheckCircle, ShieldCheck, LogOut, Crown, ShoppingBag, Sparkles, Save, Trash2 } from 'lucide-react';
 import { UserProfile } from '../types';
 import { googleSignIn, workspaceSignIn } from '../lib/workspaceAuth';
 import { sendCustomerLoginToGoogleSheet } from '../utils/googleSheetsSync';
@@ -23,33 +23,56 @@ export default function AuthModal({ isOpen, onClose, user, onLogin, onLogout, la
   const [submitted, setSubmitted] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
 
-  // if (!isOpen) return null; // Removed to let AnimatePresence handle it
+  // Sync form state strictly with user profile or reset completely when logged out
+  useEffect(() => {
+    if (user && user.isLoggedIn) {
+      setName(user.name || '');
+      setPhone(user.phone || '');
+      setEmail(user.email || '');
+      setAddress(user.address || '');
+    } else {
+      setName('');
+      setPhone('');
+      setEmail('');
+      setAddress('');
+      setErrorMsg('');
+      setIsEditingProfile(false);
+    }
+  }, [user, isOpen]);
+
+  const handleLogoutAction = () => {
+    setName('');
+    setPhone('');
+    setEmail('');
+    setAddress('');
+    setErrorMsg('');
+    setIsEditingProfile(false);
+    onLogout();
+  };
 
   const handleCustomerGoogleSignIn = async () => {
     setIsGoogleLoading(true);
     setErrorMsg('');
     playSound('ding');
     try {
-      // If the email field already has an admin email, use workspaceSignIn to get all scopes at once
       const isAdminEmail = email.trim().toLowerCase() === 'subhobratamondal@gmail.com' || email.trim().toLowerCase() === 'khanmegha99@gmail.com';
       
       const res = isAdminEmail ? await workspaceSignIn() : await googleSignIn();
       if (res && res.user) {
-        const gName = res.user.displayName || name || 'Valued Customer';
-        const gEmail = res.user.email || email;
-        const gPhone = phone || '9875563329';
-        const gAddress = address || 'Kolkata';
+        const gName = res.user.displayName || name.trim() || 'Valued Customer';
+        const gEmail = res.user.email || email.trim();
+        const gPhone = phone.trim();
+        const gAddress = address.trim();
 
         setName(gName);
         setEmail(gEmail);
 
-        // Secret Admin Check
+        // Strict Admin Check based strictly on authentic logged-in email or user-typed phone
         const isAdminUser = 
-          (gEmail && gEmail.toLowerCase() === 'subhobratamondal@gmail.com') || 
-          (gEmail && gEmail.toLowerCase() === 'khanmegha99@gmail.com') || 
-          (gPhone && gPhone === '9875563329') || 
-          (gPhone && gPhone === '8584017701');
+          (gEmail && (gEmail.toLowerCase() === 'subhobratamondal@gmail.com' || gEmail.toLowerCase() === 'khanmegha99@gmail.com')) || 
+          (gPhone && (gPhone === '9875563329' || gPhone === '8584017701'));
 
         const profileData = {
           name: gName,
@@ -99,7 +122,7 @@ export default function AuthModal({ isOpen, onClose, user, onLogin, onLogout, la
       name: name.trim(),
       phone: trimmedPhone,
       email: email.trim(),
-      address: address.trim() || 'Kamalgazi, Kolkata',
+      address: address.trim(),
       role: (isAdminUser ? 'admin' : 'customer') as 'admin' | 'customer'
     };
 
@@ -109,6 +132,7 @@ export default function AuthModal({ isOpen, onClose, user, onLogin, onLogout, la
       loginMethod: 'Manual Form Registration'
     });
     setSubmitted(true);
+    setIsEditingProfile(false);
     setTimeout(() => {
       setSubmitted(false);
       onClose();
@@ -151,41 +175,129 @@ export default function AuthModal({ isOpen, onClose, user, onLogin, onLogout, la
           </div>
 
           {user?.isLoggedIn ? (
-            /* Logged in View */
-            <div className="p-6 space-y-6">
-              <div className="p-4 bg-pink-50 dark:bg-pink-950/30 rounded-2xl border border-pink-100 dark:border-pink-900/40">
-                <div className="flex items-center justify-between mb-3">
+            /* Logged in View with Edit/Remove Data Options */
+            <div className="p-6 space-y-5">
+              <div className="p-4 bg-pink-50 dark:bg-pink-950/30 rounded-2xl border border-pink-100 dark:border-pink-900/40 space-y-3">
+                <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 flex items-center gap-1">
                     <ShieldCheck size={12} /> {user.role === 'admin' ? (lang === 'en' ? 'Owner Logged In' : 'মালিকের অ্যাকাউন্ট') : (lang === 'en' ? 'Customer Logged In' : 'লগইন করা আছে')}
                   </span>
                   <button
-                    onClick={onLogout}
-                    className="text-xs text-rose-600 dark:text-rose-400 font-semibold flex items-center gap-1 hover:underline"
+                    onClick={handleLogoutAction}
+                    className="text-xs text-rose-600 dark:text-rose-400 font-bold flex items-center gap-1 hover:underline px-2 py-1 rounded-lg bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-800"
                   >
-                    <LogOut size={12} /> {lang === 'en' ? 'Log Out' : 'লগ আউট'}
+                    <LogOut size={13} /> {lang === 'en' ? 'Log Out' : 'লগ আউট (সকল ডাটা মুছুন)'}
                   </button>
                 </div>
 
-                <div className="space-y-2 text-sm text-slate-700 dark:text-slate-200">
-                  <div className="flex items-center gap-2">
-                    <User size={16} className="text-pink-500 shrink-0" />
-                    <span className="font-bold">{user.name}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Phone size={16} className="text-pink-500 shrink-0" />
-                    <span>{user.phone}</span>
-                  </div>
-                  {user.email && (
-                    <div className="flex items-center gap-2">
-                      <Mail size={16} className="text-pink-500 shrink-0" />
-                      <span>{user.email}</span>
+                {!isEditingProfile ? (
+                  <>
+                    <div className="space-y-2 text-sm text-slate-700 dark:text-slate-200 pt-1">
+                      <div className="flex items-center gap-2">
+                        <User size={16} className="text-pink-500 shrink-0" />
+                        <span className="font-bold">{user.name}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Phone size={16} className="text-pink-500 shrink-0" />
+                        <span>{user.phone || (lang === 'en' ? 'No phone added' : 'ফোন নম্বর যোগ করা নেই')}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Mail size={16} className="text-pink-500 shrink-0" />
+                        <span>{user.email || (lang === 'en' ? 'No email added' : 'ইমেল যোগ করা নেই')}</span>
+                      </div>
+                      <div className="flex items-start gap-2 pt-1 border-t border-pink-200/50 dark:border-pink-900/30">
+                        <MapPin size={16} className="text-pink-500 shrink-0 mt-0.5" />
+                        <span className="text-xs leading-relaxed">{user.address || (lang === 'en' ? 'No address added' : 'ঠিকানা যোগ করা নেই')}</span>
+                      </div>
                     </div>
-                  )}
-                  <div className="flex items-start gap-2 pt-1 border-t border-pink-200/50 dark:border-pink-900/30">
-                    <MapPin size={16} className="text-pink-500 shrink-0 mt-0.5" />
-                    <span className="text-xs leading-relaxed">{user.address}</span>
-                  </div>
-                </div>
+
+                    <div className="pt-2 flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setIsEditingProfile(true)}
+                        className="flex-1 py-2 px-3 rounded-xl bg-pink-500 hover:bg-pink-600 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors shadow-sm"
+                      >
+                        <Save size={14} />
+                        {lang === 'en' ? 'Edit / Add Profile Info' : 'তথ্য পরিবর্তন বা যোগ করুন'}
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <form onSubmit={handleSubmit} className="space-y-3 pt-2">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase">
+                        {lang === 'en' ? 'Full Name' : 'আপনার নাম'}
+                      </label>
+                      <input 
+                        type="text"
+                        required
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase">
+                        {lang === 'en' ? 'WhatsApp Phone' : 'মোবাইল নম্বর'}
+                      </label>
+                      <input 
+                        type="tel"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase">
+                        {lang === 'en' ? 'Email Address' : 'ইমেল ঠিকানা'}
+                      </label>
+                      <input 
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 uppercase">
+                        {lang === 'en' ? 'Address' : 'ডেলিভারি ঠিকানা'}
+                      </label>
+                      <textarea 
+                        rows={2}
+                        value={address}
+                        onChange={(e) => setAddress(e.target.value)}
+                        className="w-full px-3 py-1.5 text-xs rounded-lg border border-slate-300 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+                      />
+                    </div>
+                    <div className="flex gap-2 pt-1">
+                      <button
+                        type="submit"
+                        className="flex-1 py-2 rounded-xl bg-pink-600 hover:bg-pink-700 text-white font-bold text-xs"
+                      >
+                        {lang === 'en' ? 'Save Changes' : 'ডাটা সেভ করুন'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAddress('');
+                          setPhone('');
+                        }}
+                        className="py-2 px-3 rounded-xl bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-xs flex items-center gap-1"
+                        title={lang === 'en' ? 'Clear optional phone & address' : 'ফোন ও ঠিকানা মুছুন'}
+                      >
+                        <Trash2 size={13} />
+                        {lang === 'en' ? 'Clear Extra' : 'মুছুন'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsEditingProfile(false)}
+                        className="py-2 px-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold text-xs"
+                      >
+                        {lang === 'en' ? 'Cancel' : 'বাতিল'}
+                      </button>
+                    </div>
+                  </form>
+                )}
               </div>
 
               <div className="flex gap-3">

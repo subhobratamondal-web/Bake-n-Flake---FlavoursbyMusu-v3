@@ -144,15 +144,15 @@ export default function CelebrationsModal({ isOpen, onClose, lang, onOrderForCel
 
     const year = new Date().getFullYear();
     const holidays: CelebrationEvent[] = [
-      { id: `holiday_dp_${year}`, personName: 'Durga Puja Festival 🪔', relationship: 'National Festival', date: `${year}-10-18`, type: 'other', notes: 'Pre-order special festive sweets & designer cakes!', isGoogleCalendar: true },
-      { id: `holiday_kali_${year}`, personName: 'Diwali & Kali Puja 🎆', relationship: 'National Festival', date: `${year}-11-01`, type: 'other', notes: 'Gourmet chocolate boxes & festive gift hampers!', isGoogleCalendar: true },
-      { id: `holiday_xmas_${year}`, personName: 'Christmas Eve & Day 🎄', relationship: 'Holiday Event', date: `${year}-12-25`, type: 'other', notes: 'Rich plum cakes & fruit cakes pre-order!', isGoogleCalendar: true },
-      { id: `holiday_ny_${year}`, personName: 'New Year Party 🎆', relationship: 'Holiday Event', date: `${year}-12-31`, type: 'other', notes: 'Celebrate 2027 with customized midnight cake!', isGoogleCalendar: true },
-      { id: `holiday_val_${year}`, personName: 'Valentine\'s Day ❤️', relationship: 'Special Occasion', date: `${year}-02-14`, type: 'other', notes: 'Heart-shaped red velvet cakes & chocolates!', isGoogleCalendar: true },
-      { id: `holiday_poila_${year}`, personName: 'Poila Baisakh (Bengali New Year) 🌾', relationship: 'Cultural Event', date: `${year}-04-14`, type: 'other', notes: 'Traditional Bengali sweet treats & bento cakes!', isGoogleCalendar: true },
-      { id: `holiday_mom_${year}`, personName: 'Mother\'s Day 🌸', relationship: 'Family Event', date: `${year}-05-10`, type: 'other', notes: 'Order customized fresh flower cake for Mom!', isGoogleCalendar: true },
-      { id: `holiday_dad_${year}`, personName: 'Father\'s Day 👔', relationship: 'Family Event', date: `${year}-06-21`, type: 'other', notes: 'Surprise Dad with gourmet butterscotch cake!', isGoogleCalendar: true },
-      { id: `holiday_teach_${year}`, personName: 'Teacher\'s Day 📚', relationship: 'Special Day', date: `${year}-09-05`, type: 'other', notes: 'Thank you cupcakes & teacher celebration hampers!', isGoogleCalendar: true },
+      { id: `holiday_dp_${year}`, personName: 'Durga Puja Festival 🪔', relationship: 'National Festival', date: `${year}-10-18`, type: 'other' as const, notes: 'Pre-order special festive sweets & designer cakes!', isGoogleCalendar: true },
+      { id: `holiday_kali_${year}`, personName: 'Diwali & Kali Puja 🎆', relationship: 'National Festival', date: `${year}-11-01`, type: 'other' as const, notes: 'Gourmet chocolate boxes & festive gift hampers!', isGoogleCalendar: true },
+      { id: `holiday_xmas_${year}`, personName: 'Christmas Eve & Day 🎄', relationship: 'Holiday Event', date: `${year}-12-25`, type: 'other' as const, notes: 'Rich plum cakes & fruit cakes pre-order!', isGoogleCalendar: true },
+      { id: `holiday_ny_${year}`, personName: 'New Year Party 🎆', relationship: 'Holiday Event', date: `${year}-12-31`, type: 'other' as const, notes: 'Celebrate 2027 with customized midnight cake!', isGoogleCalendar: true },
+      { id: `holiday_val_${year}`, personName: 'Valentine\'s Day ❤️', relationship: 'Special Occasion', date: `${year}-02-14`, type: 'other' as const, notes: 'Heart-shaped red velvet cakes & chocolates!', isGoogleCalendar: true },
+      { id: `holiday_poila_${year}`, personName: 'Poila Baisakh (Bengali New Year) 🌾', relationship: 'Cultural Event', date: `${year}-04-14`, type: 'other' as const, notes: 'Traditional Bengali sweet treats & bento cakes!', isGoogleCalendar: true },
+      { id: `holiday_mom_${year}`, personName: 'Mother\'s Day 🌸', relationship: 'Family Event', date: `${year}-05-10`, type: 'other' as const, notes: 'Order customized fresh flower cake for Mom!', isGoogleCalendar: true },
+      { id: `holiday_dad_${year}`, personName: 'Father\'s Day 👔', relationship: 'Family Event', date: `${year}-06-21`, type: 'other' as const, notes: 'Surprise Dad with gourmet butterscotch cake!', isGoogleCalendar: true },
+      { id: `holiday_teach_${year}`, personName: 'Teacher\'s Day 📚', relationship: 'Special Day', date: `${year}-09-05`, type: 'other' as const, notes: 'Thank you cupcakes & teacher celebration hampers!', isGoogleCalendar: true },
     ];
 
     const token = getAccessToken();
@@ -652,7 +652,7 @@ export default function CelebrationsModal({ isOpen, onClose, lang, onOrderForCel
                                    personName: holiday.summary,
                                    relationship: 'Holiday',
                                    date: (holiday.start?.date || holiday.start?.dateTime || '').split('T')[0],
-                                   type: 'other',
+                                   type: 'other' as const,
                                    notes: 'Imported from Google Calendar',
                                    isGoogleCalendar: true
                                  };
@@ -670,7 +670,7 @@ export default function CelebrationsModal({ isOpen, onClose, lang, onOrderForCel
                                <button 
                                  onClick={() => {
                                    onOrderForCelebration({
-                                     id: holiday.id, personName: holiday.summary, relationship: 'Holiday', date: (holiday.start?.date || holiday.start?.dateTime || '').split('T')[0], type: 'other', notes: 'Google Holiday'
+                                     id: holiday.id, personName: holiday.summary, relationship: 'Holiday', date: (holiday.start?.date || holiday.start?.dateTime || '').split('T')[0], type: 'other' as const, notes: 'Google Holiday'
                                    });
                                    onClose();
                                  }}
@@ -707,7 +707,7 @@ export default function CelebrationsModal({ isOpen, onClose, lang, onOrderForCel
                                    personName: task.title,
                                    relationship: 'Task',
                                    date: task.due ? task.due.split('T')[0] : new Date().toISOString().split('T')[0],
-                                   type: 'other',
+                                   type: 'other' as const,
                                    notes: 'Imported from Google Tasks',
                                    isGoogleCalendar: true
                                  };
@@ -725,7 +725,7 @@ export default function CelebrationsModal({ isOpen, onClose, lang, onOrderForCel
                                <button 
                                  onClick={() => {
                                    onOrderForCelebration({
-                                     id: task.id, personName: task.title, relationship: 'Task', date: task.due ? task.due.split('T')[0] : new Date().toISOString().split('T')[0], type: 'other', notes: 'Google Task'
+                                     id: task.id, personName: task.title, relationship: 'Task', date: task.due ? task.due.split('T')[0] : new Date().toISOString().split('T')[0], type: 'other' as const, notes: 'Google Task'
                                    });
                                    onClose();
                                  }}

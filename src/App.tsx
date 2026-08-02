@@ -21,7 +21,7 @@ import { OptimizedImage } from './components/OptimizedImage';
 import { VideoSkeleton } from './components/common/Skeleton';
 import { WEATHER_THEMES, fetchCurrentWeather } from './utils/weatherTheme';
 import { flavours, gifts, moreOptionsData } from './constants/data';
-import { Play, Youtube, Facebook, X, Heart, Star, Snowflake, Gift, Video, Pin, ArrowUp, Sun, Moon, Keyboard, RefreshCw, CheckCircle2, ShoppingCart, User as UserIcon, Clock, Shield, MessageCircle } from 'lucide-react';
+import { Play, Youtube, Facebook, X, Heart, Star, Snowflake, Gift, Video, Pin, ArrowUp, Sun, Moon, Keyboard, RefreshCw, CheckCircle2, ShoppingCart, ShoppingBag, User as UserIcon, Clock, Shield, MessageCircle } from 'lucide-react';
 import AuthModal from './components/AuthModal';
 import CartDrawer from './components/CartDrawer';
 import OrderHistoryModal from './components/OrderHistoryModal';
@@ -33,7 +33,7 @@ import CelebrationsBanner from './components/CelebrationsBanner';
 import ProBakingTips from './components/ProBakingTips';
 import CakeBuilder from './components/CakeBuilder';
 import WorkspaceModal from './components/WorkspaceModal';
-import { getAccessToken, initAuth } from './lib/workspaceAuth';
+import { getAccessToken, initAuth, logoutGoogle } from './lib/workspaceAuth';
 import { listCalendarEvents, pushOrderDeadlineCalendarEvent } from './utils/calendarService';
 import { sendEmailViaAppsScript, sendStatusUpdateEmail } from './utils/gmailService';
 import { playSound } from './lib/sounds';
@@ -416,8 +416,12 @@ export default function App() {
       ...cachedParsed
     };
 
-    if (combined.items) {
-      if (!combined.items.some((it: any) => it.nameEn && it.nameEn.toLowerCase() === 'chocolate cakes')) {
+    if (combined.items && combined.items.length > 0) {
+      const chocIdx = combined.items.findIndex((it: any) => it.nameEn && it.nameEn.toLowerCase().trim() === 'chocolate cakes');
+      if (chocIdx > 0) {
+        const [choc] = combined.items.splice(chocIdx, 1);
+        combined.items.unshift(choc);
+      } else if (chocIdx === -1) {
         combined.items.unshift({
           nameEn: "Chocolate Cakes",
           nameBn: "চকলেট কেক",
@@ -826,6 +830,11 @@ export default function App() {
     }
     setUser(null);
     setIsAdminLoggedIn(false);
+    try {
+      localStorage.removeItem('bnf_user');
+      localStorage.removeItem('bnf_google_token');
+      logoutGoogle();
+    } catch (e) {}
     setToast({
       message: lang === 'en' ? 'Logged out successfully' : 'লগ আউট সফল হয়েছে',
       visible: true
@@ -1472,6 +1481,20 @@ export default function App() {
             title={user?.isLoggedIn ? user.name : (lang === 'en' ? 'Login' : 'লগইন')}
           >
             <UserIcon size={18} className="text-slate-700 dark:text-slate-300" />
+          </button>
+
+          {/* Cart / Add to Cart Trigger (Right after User Account tab) */}
+          <button
+            onClick={() => setIsCartOpen(true)}
+            className="p-3 sm:p-3.5 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-white shadow-md transition-all relative border border-slate-200/80 dark:border-slate-700/60 shrink-0"
+            title={lang === 'en' ? 'Cart / Added Items' : 'কার্ট'}
+          >
+            <ShoppingBag size={18} className="text-pink-600 dark:text-pink-400" />
+            {cart.length > 0 && (
+              <span className="absolute -top-1 -right-1 bg-pink-600 text-white font-extrabold text-[8px] w-4 h-4 rounded-full flex items-center justify-center border border-white">
+                {cart.reduce((sum, item) => sum + item.quantity, 0)}
+              </span>
+            )}
           </button>
 
           {/* Wishlist Trigger */}

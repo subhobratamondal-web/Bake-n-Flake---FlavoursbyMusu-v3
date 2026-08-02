@@ -1,5 +1,5 @@
-import React, { useContext, useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import React, { useContext } from 'react';
+import { motion } from 'motion/react';
 import { Heart, Sparkles } from 'lucide-react';
 import { AppContext } from '../App';
 import { cn } from '../lib/utils';
@@ -9,41 +9,67 @@ import { OptimizedImage } from './OptimizedImage';
 
 export default function Story() {
   const { t, galleryData } = useContext(AppContext);
-  const [currentSlide, setCurrentSlide] = useState(0);
 
   const storyImagesData = (galleryData['Story Section'] as string[])?.filter(url => url && url.length > 0);
-  const storyImages = (storyImagesData && storyImagesData.length > 0) ? storyImagesData : (FULL_GALLERY_BACKUP['Story Section'] as string[]) || [];
+  const rawStoryImages = (storyImagesData && storyImagesData.length > 0) ? storyImagesData : (FULL_GALLERY_BACKUP['Story Section'] as string[]) || [];
+  
+  // Ensure we have at least 3 images for a rich back and forth sliding animation
+  const storyImages = rawStoryImages.length >= 3 
+    ? rawStoryImages 
+    : [...rawStoryImages, ...rawStoryImages, ...rawStoryImages].slice(0, 4);
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % storyImages.length);
-    }, 4000);
-    return () => clearInterval(interval);
-  }, [storyImages.length]);
+  const totalImages = storyImages.length;
+  const maxTranslatePercent = totalImages > 1 ? -((totalImages - 1) / totalImages) * 100 : 0;
 
   return (
     <section id="story" className="py-24 bg-transparent relative transition-colors duration-500 overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-        <div className="grid lg:grid-cols-2 gap-20 items-center">
+        <div className="grid lg:grid-cols-2 gap-12 lg:gap-20 items-center">
           <motion.div
             initial={{ opacity: 0, x: -50 }}
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true }}
             className="relative"
           >
-             {/* Slider Container */}
-             <div className="aspect-[4/5] rounded-[4rem] overflow-hidden shadow-[0_40px_80px_rgba(0,0,0,0.3)] relative z-10 border-8 border-white dark:border-white/5 bg-white/5 neon-border-pink">
-                <AnimatePresence mode="popLayout" initial={false}>
-                  <OptimizedImage 
-                    src={storyImages[currentSlide]}
-                    alt="Our Story" 
-                    width={800}
-                    quality={80}
-                    fallbackSrc="https://i.ibb.co/XkYN11bL/PROFILE.jpg"
-                    className="absolute inset-0 w-full h-full object-cover"
-                  />
-                </AnimatePresence>
-             </div>
+              {/* Horizontal Ping-Pong Sliding Carousel Frame */}
+              <div className="w-full h-[360px] sm:h-[440px] md:h-[520px] lg:h-[580px] rounded-[2.5rem] md:rounded-[3.5rem] overflow-hidden shadow-[0_30px_70px_rgba(0,0,0,0.35)] relative z-10 border-4 border-pink-500/20 dark:border-white/10 bg-slate-900/40 neon-border-pink">
+                <style>{`
+                  @keyframes storyPingPongGpu {
+                    0% { transform: translate3d(0%, 0, 0); }
+                    50% { transform: translate3d(${maxTranslatePercent}%, 0, 0); }
+                    100% { transform: translate3d(0%, 0, 0); }
+                  }
+                  .story-gpu-slider {
+                    animation: storyPingPongGpu ${Math.max(16, totalImages * 7)}s ease-in-out infinite;
+                    will-change: transform;
+                    backface-visibility: hidden;
+                    -webkit-backface-visibility: hidden;
+                    transform: translateZ(0);
+                    -webkit-transform: translateZ(0);
+                  }
+                `}</style>
+                <div
+                  className="flex h-full story-gpu-slider"
+                  style={{ width: `${totalImages * 100}%` }}
+                >
+                  {storyImages.map((src, idx) => (
+                    <div 
+                      key={idx} 
+                      className="h-full relative overflow-hidden shrink-0" 
+                      style={{ width: `${100 / totalImages}%` }}
+                    >
+                      <OptimizedImage 
+                        src={src}
+                        alt={`Our Story ${idx + 1}`} 
+                        width={1000}
+                        quality={85}
+                        fallbackSrc="https://i.ibb.co/XkYN11bL/PROFILE.jpg"
+                        className="w-full h-full object-cover select-none"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
 
              {/* OWNER Floating Accent for Story Slider */}
              <motion.a 
@@ -53,9 +79,9 @@ export default function Story() {
                initial={{ opacity: 0, x: -20 }}
                whileInView={{ opacity: 1, x: 0 }}
                viewport={{ once: true }}
-               className="absolute bottom-4 -right-4 md:bottom-12 md:-right-16 z-30 p-3 md:p-5 rounded-[1.5rem] md:rounded-[2.5rem] glow-tag-pink flex items-center gap-3 md:gap-4 min-w-[120px] md:min-w-[180px] hover:scale-105 transition-transform"
+               className="absolute bottom-4 -right-4 md:bottom-8 md:-right-12 z-30 p-3 md:p-4 rounded-[1.5rem] md:rounded-[2rem] glow-tag-pink flex items-center gap-3 md:gap-4 min-w-[120px] md:min-w-[170px] hover:scale-105 transition-transform"
              >
-               <div className="w-8 h-8 md:w-12 md:h-12 rounded-[0.8rem] md:rounded-[1.25rem] overflow-hidden border-2 border-white/40 shadow-lg shrink-0">
+               <div className="w-8 h-8 md:w-11 md:h-11 rounded-[0.8rem] md:rounded-[1.2rem] overflow-hidden border-2 border-white/40 shadow-lg shrink-0">
                  <img src="https://i.ibb.co/wrc3VVRg/PROFILE.jpg" alt="Musu" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                </div>
                <div className="flex flex-col">
